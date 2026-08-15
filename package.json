@@ -1,0 +1,34 @@
+{
+  "name": "pi-research-loop",
+  "version": "0.1.0",
+  "description": "A bounded, evidence-first research loop for Pi",
+  "type": "module",
+  "private": true,
+  "keywords": [
+    "pi-package",
+    "research",
+    "agent"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@earendil-works/pi-tui": "^0.84.2",
+    "@types/node": "^24.12.0",
+    "typebox": "^1.3.7",
+    "typescript": "^5.9.3"
+  }
+}
