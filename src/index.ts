@@ -61,25 +61,32 @@ export default function researchLoop(pi: ExtensionAPI): void {
   }
 
   function updateStatus(ctx: ExtensionContext): void {
+    let text: string;
+    let color: "dim" | "success" | "warning" | "accent";
+
     if (state.mode === "off") {
-      ctx.ui.setStatus("research-loop", ctx.ui.theme.fg("dim", "RESEARCH OFF"));
-      return;
+      text = "RESEARCH OFF";
+      color = "dim";
+    } else if (checkpointReached) {
+      text = `RESEARCH ${state.mode.toUpperCase()} | CHECKPOINT REACHED | RESULTS ${checkpointResultCount}`;
+      color = "success";
+    } else {
+      const parts = [
+        `RESEARCH ${state.mode.toUpperCase()}`,
+        `ACTIONS ${roundActions}`,
+        checkpointReviewPending ? "CHECKPOINT REVIEW" : undefined,
+        `OUTPUTS ${state.artifacts.length}`,
+      ].filter((part): part is string => Boolean(part));
+      text = parts.join(" | ");
+      color = checkpointReviewPending ? "warning" : state.mode === "fast" ? "success" : "accent";
     }
 
-    if (checkpointReached) {
-      const label = `RESEARCH ${state.mode.toUpperCase()} | CHECKPOINT REACHED | RESULTS ${checkpointResultCount}`;
-      ctx.ui.setStatus("research-loop", ctx.ui.theme.fg("success", label));
-      return;
-    }
-
-    const parts = [
-      `RESEARCH ${state.mode.toUpperCase()}`,
-      `ACTIONS ${roundActions}`,
-      checkpointReviewPending ? "CHECKPOINT REVIEW" : undefined,
-      `OUTPUTS ${state.artifacts.length}`,
-    ].filter((part): part is string => Boolean(part));
-    const color = checkpointReviewPending ? "warning" : state.mode === "fast" ? "success" : "accent";
-    ctx.ui.setStatus("research-loop", ctx.ui.theme.fg(color, parts.join(" | ")));
+    ctx.ui.setStatus("research-loop", undefined);
+    ctx.ui.setWidget(
+      "research-loop-status",
+      [ctx.ui.theme.fg(color, text)],
+      { placement: "belowEditor" },
+    );
   }
 
   function persistState(): void {

@@ -290,7 +290,7 @@ V1 不需要实现跨项目 Artifact Registry。
 
 Research Loop 当前是否启用必须始终容易判断。
 
-Pi 的 status 区域应使用清晰的语义标签，例如：
+Research 状态应通过 `belowEditor` widget 在编辑器下方独占一行，不与 Pi 内置 footer 或其他 extension status 混排。状态行应使用清晰的语义标签，例如：
 
 ```text
 RESEARCH FAST | ACTIONS 12 | OUTPUTS 2

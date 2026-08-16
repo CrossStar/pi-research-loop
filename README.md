@@ -26,7 +26,7 @@ pi install ./
 /artifacts
 ```
 
-默认状态是 `off`。启用后状态栏显示类似：
+默认状态是 `off`。Research 状态使用编辑器下方的独立一行显示，不与 Pi 内置 footer 或其他 extension status 混排：
 
 ```text
 RESEARCH FAST | ACTIONS 3 | OUTPUTS 2
