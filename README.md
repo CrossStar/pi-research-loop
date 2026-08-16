@@ -29,7 +29,15 @@ pi install ./
 默认状态是 `off`。启用后状态栏显示类似：
 
 ```text
-R FAST | Q 3/6 | ART 2
+RESEARCH FAST | ACTIONS 3 | OUTPUTS 2
+```
+
+插件不再设置固定 action 上限。每完成 6 个 tool actions，状态栏暂时显示 `CHECKPOINT REVIEW`，并要求 Agent 根据 evidence、研究分支、成本、停滞和不确定性判断是否需要 checkpoint；当前最小实验尚未完成时可以直接继续。
+
+```text
+RESEARCH FAST | ACTIONS 6 | CHECKPOINT REVIEW | OUTPUTS 2
+RESEARCH FAST | CHECKPOINT REACHED | RESULTS 2
+RESEARCH OFF
 ```
 
 Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显的长任务入口，同时要求 Agent 优先做最小实验。

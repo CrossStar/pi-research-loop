@@ -128,31 +128,23 @@ V1 可以采用简单启发式规则，不需要实现复杂分类器。
 
 ------
 
-## 6. Work Quantum
+## 6. Research Activity 与 Soft Review
 
-V1 必须给 Agent 的连续自治执行增加明确边界。
+V1 不再为 Agent 的连续执行设置固定 tool-action 上限。
 
-Research Loop 使用 Work Quantum 表示一次连续工作的预算。
+插件应记录从本轮用户输入开始的 tool action 数量，但这个数字只用于状态可见性和 checkpoint 重新评估，不作为 block 或 terminate 的条件。
 
 例如：
 
 ```text
-Q 3/6
+RESEARCH FAST | ACTIONS 6 | CHECKPOINT REVIEW | OUTPUTS 2
 ```
 
-表示当前 Research Quantum 已经使用了六个可用 tool actions 中的三个。
+每完成六个 tool actions，插件应在下一次模型调用中注入一次 Soft Review，要求 Agent 判断是否已经出现有意义 evidence、研究分支、成本升级、不确定性停滞或探索无进展。
 
-Quantum 的目的不是精确控制每一个 token，也不是机械地每执行六次工具就强行中断，而是防止 Agent 在没有重新评估研究方向的情况下无限持续执行。
+如果当前最小实验仍未完成，并且没有上述语义触发条件，Agent 可以继续执行，不需要 checkpoint。
 
-Agent 应知道当前剩余的执行预算，并倾向于在预算耗尽前形成一个有意义的阶段性结果。
-
-如果 Agent 在第三次工具调用时已经得到一个重要实验结果，就应该提前 checkpoint。
-
-如果前五次只是必要的信息搜集，则可以继续到第六次。
-
-Quantum 是 autonomy 的上限，而不是必须消耗完的额度。
-
-V1 只需要实现一个简单可靠的 tool-call counter，不需要复杂的动态预算算法。
+Action counter 没有硬性上限。Checkpoint 的时机由研究语义决定，而不是由固定次数决定。
 
 ------
 
@@ -196,13 +188,15 @@ V1 不应该简单地按照固定次数机械 checkpoint。
 
 至少需要考虑三种触发条件。
 
-第一种是 Quantum Trigger。当当前连续工具调用达到预算上限时，Agent 应总结当前进展并交还控制权。
+第一种是 Evidence Trigger。当一个新的结果明显改变了当前假设，例如实验产生了一张关键图、一个显著统计结果或者一个出乎预期的观察时，Agent 应优先 checkpoint，而不是自动扩展实验。
 
-第二种是 Evidence Trigger。当一个新的结果明显改变了当前假设，例如实验产生了一张关键图、一个显著统计结果或者一个出乎预期的观察时，Agent 应优先 checkpoint，而不是自动扩展实验。
+第二种是 Decision Trigger。当下一步存在两个或多个明显不同的研究方向，或者下一步操作成本明显升高时，应优先把选择交给用户。
 
-第三种是 Decision Trigger。当下一步存在两个或多个明显不同的研究方向，或者下一步操作成本明显升高时，应优先把选择交给用户。
+第三种是 Stagnation Trigger。当连续探索没有明显降低不确定性，或者当前实验无法区分多个解释时，Agent 应总结当前障碍并 checkpoint。
 
-V1 不需要真正计算复杂的 intervention value。通过 prompt 规则和简单工具预算实现这一行为即可。
+Tool action 每增加六次时，插件只提醒 Agent 重新评估这些条件，不强制 checkpoint。
+
+V1 不需要真正计算复杂的 intervention value。通过 prompt 规则、action counter 和 Soft Review 实现这一行为即可。
 
 ------
 
@@ -296,21 +290,28 @@ V1 不需要实现跨项目 Artifact Registry。
 
 Research Loop 当前是否启用必须始终容易判断。
 
-Pi 的 status 区域应至少展示：
+Pi 的 status 区域应使用清晰的语义标签，例如：
 
 ```text
-R FAST │ Q 3/6 │ ART 2
+RESEARCH FAST | ACTIONS 12 | OUTPUTS 2
+RESEARCH FAST | ACTIONS 12 | CHECKPOINT REVIEW | OUTPUTS 2
+RESEARCH FAST | CHECKPOINT REACHED | RESULTS 2
+RESEARCH OFF
 ```
 
 其中：
 
-`R FAST` 表示当前处于 Research Fast Mode。
+`RESEARCH FAST` 表示当前 Research Mode。
 
-`Q 3/6` 表示当前 Work Quantum 使用情况。
+`ACTIONS 12` 表示本轮已执行十二个 tool actions，不表示预算或上限。
 
-`ART 2` 表示当前 session 已发现两个 artifact。
+`OUTPUTS 2` 表示当前 session 索引了两个逻辑输出，但不代表它们已经成为 evidence。
 
-状态信息应该保持简短，不应占据大量终端空间。
+`CHECKPOINT REVIEW` 表示 Agent 应重新判断语义触发条件，但可以继续当前未完成的最小实验。
+
+`RESULTS 2` 表示 checkpoint 中包含两个已经解释和策展的研究结果。
+
+状态信息应该保持简短且语义明确，不应占据大量终端空间。
 
 用户不需要打开配置文件才能知道当前插件正在以什么方式控制 Agent。
 

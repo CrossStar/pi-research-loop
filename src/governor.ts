@@ -51,7 +51,7 @@ export function evaluateFastCommand(command: string, userPrompt: string): GateDe
     return {
       block: true,
       reason:
-        "Research Fast Mode blocked repository-wide formatting or linting. Restrict validation to the file or experiment changed in this quantum.",
+        "Research Fast Mode blocked repository-wide formatting or linting. Restrict validation to the file or experiment changed in this research round.",
     };
   }
 
@@ -66,10 +66,17 @@ export function evaluateFastCommand(command: string, userPrompt: string): GateDe
   return { block: false };
 }
 
-export function researchPolicy(mode: Exclude<ResearchMode, "off">, used: number, limit: number): string {
+export function researchPolicy(
+  mode: Exclude<ResearchMode, "off">,
+  actions: number,
+  checkpointReview: boolean,
+): string {
   const fastRules = mode === "fast"
     ? `\nFAST constraints:\n- Prefer the smallest executable probe, targeted read, small sample, or one-variable change.\n- Avoid unrelated refactors, broad tests, repository-wide formatting, checksums, environment manifests, exhaustive benchmarks, and speculative infrastructure.\n- Validation cost must match the importance of the current claim.`
-    : `\nNORMAL constraints:\n- Keep the bounded research loop and checkpoints, but use fuller validation when it materially strengthens the current conclusion.`;
+    : `\nNORMAL constraints:\n- Keep the research loop and semantic checkpoints, but use fuller validation when it materially strengthens the current conclusion.`;
+  const review = checkpointReview
+    ? `\n\nCHECKPOINT REVIEW:\nYou have completed another interval of tool actions. Reassess now whether meaningful evidence exists, the hypothesis changed, a decision branch appeared, uncertainty stopped decreasing, or the next action materially increases cost. If none apply and the current minimal experiment is still incomplete, continue without checkpoint.`
+    : "";
 
-  return `[RESEARCH ${mode.toUpperCase()} MODE]\nOptimize for time-to-insight.\nAvoid unnecessary defensive engineering.\nReturn control after meaningful evidence.\n\nWork Quantum: ${used}/${limit} tool actions used. The quantum is a ceiling, not a target.${fastRules}\n\nCheckpoint rules:\n- Call research_checkpoint as soon as meaningful evidence changes or supports the hypothesis.\n- Call it when the quantum is exhausted, when next steps branch, or before a materially more expensive action.\n- research_checkpoint must be the only tool call in its final batch. Do not continue automatically after it.\n- State the hypothesis, observation, remaining uncertainty, and one concrete next action.\n- Do not attach files merely because they were generated. Add only understood, relevant entries to research_checkpoint.results, with a clear title, role, description, and takeaway when available.\n- For a dataset, attach its root directory or data file and name the columns relevant to the current hypothesis.`;
+  return `[RESEARCH ${mode.toUpperCase()} MODE]\nOptimize for time-to-insight.\nAvoid unnecessary defensive engineering.\nReturn control after meaningful evidence.\n\nRound activity: ${actions} tool actions. There is no hard action limit; choose checkpoint timing from research semantics, not the counter.${fastRules}${review}\n\nCheckpoint rules:\n- Call research_checkpoint when meaningful evidence changes or supports the hypothesis.\n- Call it when next steps branch, uncertainty stops decreasing, progress stalls, or before a materially more expensive action.\n- Continue without checkpoint while the same minimal experiment is incomplete and no semantic checkpoint trigger applies.\n- research_checkpoint must be the only tool call in its final batch. Do not continue automatically after it.\n- State the hypothesis, observation, remaining uncertainty, and one concrete next action.\n- Do not attach files merely because they were generated. Add only understood, relevant entries to research_checkpoint.results, with a clear title, role, description, and takeaway when available.\n- For a dataset, attach its root directory or data file and name the columns relevant to the current hypothesis.`;
 }

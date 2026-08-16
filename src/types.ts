@@ -39,6 +39,6 @@ export interface CheckpointDetails {
   observation: string;
   uncertainty: string;
   next: string;
-  quantumUsed: number;
+  actionCount: number;
   results: CheckpointResult[];
 }

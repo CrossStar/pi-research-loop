@@ -16,7 +16,7 @@ import type {
 
 const STATE_ENTRY = "research-loop-state";
 const POLICY_MESSAGE = "research-loop-policy";
-const QUANTUM_LIMIT = 6;
+const CHECKPOINT_REVIEW_INTERVAL = 6;
 
 interface CheckpointResultInput {
   path: string;
@@ -29,13 +29,27 @@ interface CheckpointResultInput {
 
 export default function researchLoop(pi: ExtensionAPI): void {
   let state: ResearchState = { mode: "off", artifacts: [] };
-  let quantumUsed = 0;
+  let roundActions = 0;
+  let nextCheckpointReviewAt = CHECKPOINT_REVIEW_INTERVAL;
+  let checkpointReviewPending = false;
+  let checkpointReviewRaisedThisTurn = false;
+  let checkpointReached = false;
+  let checkpointResultCount = 0;
   let toolCallsThisTurn = 0;
   let checkpointAccepted = false;
   let currentUserPrompt = "";
   const checkpointImages = new Map<string, { data: string; mimeType: string }>();
   let radar: ArtifactRadar | undefined;
   let activeContext: ExtensionContext | undefined;
+
+  function resetRound(): void {
+    roundActions = 0;
+    nextCheckpointReviewAt = CHECKPOINT_REVIEW_INTERVAL;
+    checkpointReviewPending = false;
+    checkpointReviewRaisedThisTurn = false;
+    checkpointReached = false;
+    checkpointResultCount = 0;
+  }
 
   function setCheckpointToolActive(mode: ResearchMode): void {
     const active = pi.getActiveTools();
@@ -47,15 +61,25 @@ export default function researchLoop(pi: ExtensionAPI): void {
   }
 
   function updateStatus(ctx: ExtensionContext): void {
-    const artifactCount = state.artifacts.length;
     if (state.mode === "off") {
-      ctx.ui.setStatus("research-loop", ctx.ui.theme.fg("dim", `R OFF | ART ${artifactCount}`));
+      ctx.ui.setStatus("research-loop", ctx.ui.theme.fg("dim", "RESEARCH OFF"));
       return;
     }
 
-    const color = state.mode === "fast" ? "success" : "accent";
-    const label = `R ${state.mode.toUpperCase()} | Q ${quantumUsed}/${QUANTUM_LIMIT} | ART ${artifactCount}`;
-    ctx.ui.setStatus("research-loop", ctx.ui.theme.fg(color, label));
+    if (checkpointReached) {
+      const label = `RESEARCH ${state.mode.toUpperCase()} | CHECKPOINT REACHED | RESULTS ${checkpointResultCount}`;
+      ctx.ui.setStatus("research-loop", ctx.ui.theme.fg("success", label));
+      return;
+    }
+
+    const parts = [
+      `RESEARCH ${state.mode.toUpperCase()}`,
+      `ACTIONS ${roundActions}`,
+      checkpointReviewPending ? "CHECKPOINT REVIEW" : undefined,
+      `OUTPUTS ${state.artifacts.length}`,
+    ].filter((part): part is string => Boolean(part));
+    const color = checkpointReviewPending ? "warning" : state.mode === "fast" ? "success" : "accent";
+    ctx.ui.setStatus("research-loop", ctx.ui.theme.fg(color, parts.join(" | ")));
   }
 
   function persistState(): void {
@@ -67,7 +91,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   function changeMode(mode: ResearchMode, ctx: ExtensionContext): void {
     state.mode = mode;
-    quantumUsed = 0;
+    resetRound();
     setCheckpointToolActive(mode);
     persistState();
     updateStatus(ctx);
@@ -122,10 +146,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "End the current research quantum and return control to the user. Attach only semantically relevant results, each with a title, role, purpose, and optional takeaway/relevant columns. Result paths may point to files or dataset directories. Call this alone as the final tool action.",
-    promptSnippet: "End a research quantum with structured evidence and return control to the user",
+      "End the current research round and return control to the user. Attach only semantically relevant results, each with a title, role, purpose, and optional takeaway/relevant columns. Result paths may point to files or dataset directories. Call this alone as the final tool action.",
+    promptSnippet: "End a research round with structured evidence and return control to the user",
     promptGuidelines: [
-      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, before materially higher cost, or when the research quantum is exhausted. Attach only results you can explain; for each result state its purpose and role, and specify relevant table columns when known.",
+      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. Attach only results you can explain; for each result state its purpose and role, and specify relevant table columns when known.",
     ],
     parameters: Type.Object({
       hypothesis: Type.String({ description: "The hypothesis currently being tested" }),
@@ -163,9 +187,13 @@ export default function researchLoop(pi: ExtensionAPI): void {
         observation: params.observation,
         uncertainty: params.uncertainty,
         next: params.next,
-        quantumUsed,
+        actionCount: roundActions,
         results,
       };
+      checkpointReached = true;
+      checkpointResultCount = results.length;
+      checkpointReviewPending = false;
+      updateStatus(ctx);
       persistState();
       const resultText = results
         .map((result) => `${result.title} [${result.role}]\n${result.description}\n${result.absolutePath}`)
@@ -314,7 +342,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
-    quantumUsed = 0;
+    resetRound();
     checkpointImages.clear();
 
     const latestState = ctx.sessionManager
@@ -360,13 +388,13 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event, ctx) => {
     currentUserPrompt = event.prompt;
-    quantumUsed = 0;
+    resetRound();
     checkpointImages.clear();
     updateStatus(ctx);
     if (state.mode === "off") return;
 
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${researchPolicy(state.mode, quantumUsed, QUANTUM_LIMIT)}`,
+      systemPrompt: `${event.systemPrompt}\n\n${researchPolicy(state.mode, roundActions, checkpointReviewPending)}`,
     };
   });
 
@@ -379,7 +407,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
     const policyMessage = {
       role: "custom" as const,
       customType: POLICY_MESSAGE,
-      content: researchPolicy(state.mode, quantumUsed, QUANTUM_LIMIT),
+      content: researchPolicy(state.mode, roundActions, checkpointReviewPending),
       display: false,
       timestamp: Date.now(),
     } as (typeof event.messages)[number];
@@ -389,6 +417,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
   pi.on("turn_start", () => {
     toolCallsThisTurn = 0;
     checkpointAccepted = false;
+    checkpointReviewRaisedThisTurn = false;
   });
 
   pi.on("tool_call", (event, ctx) => {
@@ -417,22 +446,24 @@ export default function researchLoop(pi: ExtensionAPI): void {
     }
 
     toolCallsThisTurn += 1;
-    if (quantumUsed >= QUANTUM_LIMIT) {
-      return {
-        block: true,
-        reason:
-          "Research quantum exhausted. The hard autonomy bound has been reached; control is returning to the user. Start the next quantum after user calibration.",
-        terminate: true,
-      };
-    }
-
     if (state.mode === "fast" && event.toolName === "bash") {
       const command = (event.input as { command?: string }).command ?? "";
       const decision = evaluateFastCommand(command, currentUserPrompt);
       if (decision.block) return { block: true, reason: decision.reason };
     }
 
-    quantumUsed += 1;
+    if (checkpointReviewPending && !checkpointReviewRaisedThisTurn) {
+      checkpointReviewPending = false;
+      while (nextCheckpointReviewAt <= roundActions) {
+        nextCheckpointReviewAt += CHECKPOINT_REVIEW_INTERVAL;
+      }
+    }
+
+    roundActions += 1;
+    if (roundActions >= nextCheckpointReviewAt) {
+      checkpointReviewPending = true;
+      checkpointReviewRaisedThisTurn = true;
+    }
     updateStatus(ctx);
   });
 
