@@ -10,6 +10,8 @@ import type {
   ArtifactRecord,
   CheckpointDetails,
   CheckpointResult,
+  ExperimentParameter,
+  ExperimentVariable,
   ResearchResultRole,
   ResearchState,
 } from "./types.js";
@@ -153,15 +155,39 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "End the current research round and return control to the user. Attach only semantically relevant results, each with a title, role, purpose, and optional takeaway/relevant columns. Result paths may point to files or dataset directories. Call this alone as the final tool action.",
+      "End the current research round and return control to the user with a clear experiment rationale/design, key variables and parameters, main result, analysis, uncertainty, and next action. Omit experiment only for non-experimental decision or stagnation checkpoints. Attach only semantically relevant results. Call this alone as the final tool action.",
     promptSnippet: "End a research round with structured evidence and return control to the user",
     promptGuidelines: [
-      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. Attach only results you can explain; for each result state its purpose and role, and specify relevant table columns when known.",
+      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. When an experiment was run, explain why it was needed, its design, key variables and parameters, then separate the main result from its analysis. Attach only results you can explain.",
     ],
     parameters: Type.Object({
       hypothesis: Type.String({ description: "The hypothesis currently being tested" }),
-      observation: Type.String({ description: "The concrete evidence just observed" }),
-      uncertainty: Type.String({ description: "What remains unknown or is not established by this evidence" }),
+      experiment: Type.Optional(
+        Type.Object({
+          rationale: Type.String({ description: "Why this experiment was necessary for the current hypothesis" }),
+          design: Type.String({ description: "Concise experimental setup and comparison being made" }),
+          variables: Type.Array(
+            Type.Object({
+              name: Type.String({ description: "Variable name" }),
+              role: StringEnum(["independent", "dependent", "control", "derived"] as const),
+              description: Type.String({ description: "What the variable represents in this experiment" }),
+              value: Type.Optional(Type.String({ description: "Fixed value, levels, or range when useful" })),
+            }),
+            { minItems: 1, maxItems: 12, description: "Key variables needed to interpret the experiment" },
+          ),
+          parameters: Type.Array(
+            Type.Object({
+              name: Type.String({ description: "Parameter name" }),
+              value: Type.String({ description: "Parameter value used" }),
+              rationale: Type.Optional(Type.String({ description: "Why this value matters" })),
+            }),
+            { minItems: 1, maxItems: 12, description: "Key parameter settings, not a full configuration dump" },
+          ),
+        }),
+      ),
+      observation: Type.String({ description: "The main experimental result, stated separately from interpretation" }),
+      analysis: Type.String({ description: "Interpretation of the result and whether it supports the hypothesis" }),
+      uncertainty: Type.String({ description: "Limitations, confounders, and what remains unknown" }),
       next: Type.String({ description: "One concrete next action for user calibration" }),
       results: Type.Optional(
         Type.Array(
@@ -191,7 +217,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
       const results = await prepareCheckpointResults(params.results, ctx);
       const details: CheckpointDetails = {
         hypothesis: params.hypothesis,
+        experiment: params.experiment,
         observation: params.observation,
+        analysis: params.analysis,
         uncertainty: params.uncertainty,
         next: params.next,
         actionCount: roundActions,
@@ -205,12 +233,29 @@ export default function researchLoop(pi: ExtensionAPI): void {
       const resultText = results
         .map((result) => `${result.title} [${result.role}]\n${result.description}\n${result.absolutePath}`)
         .join("\n\n");
-      const artifactText = resultText ? `\nResults:\n${resultText}` : "";
+      const artifactText = resultText ? `\n\nSupporting Results\n${resultText}` : "";
+      const experimentText = details.experiment
+        ? [
+            `Why This Experiment\n${details.experiment.rationale}`,
+            `Experimental Design\n${details.experiment.design}`,
+            `Key Variables\n${details.experiment.variables.map(formatVariable).join("\n")}`,
+            `Key Parameters\n${details.experiment.parameters.map(formatParameter).join("\n")}`,
+          ].join("\n\n")
+        : undefined;
+      const checkpointText = [
+        "Research checkpoint reached. Control returned to the user.",
+        `Hypothesis\n${details.hypothesis}`,
+        experimentText,
+        `Main Result\n${details.observation}`,
+        `Analysis\n${details.analysis}`,
+        `Uncertainty\n${details.uncertainty}`,
+        `Next\n${details.next}`,
+      ].filter((section): section is string => Boolean(section)).join("\n\n");
       return {
         content: [
           {
             type: "text" as const,
-            text: `Research checkpoint reached. Control returned to the user.${artifactText}`,
+            text: `${checkpointText}${artifactText}`,
           },
         ],
         details,
@@ -225,20 +270,45 @@ export default function researchLoop(pi: ExtensionAPI): void {
       if (!details) return new Text("Research checkpoint reached.", 0, 0);
 
       const container = new Container();
-      const text = [
+      const sections = [
         theme.fg("accent", theme.bold("Hypothesis")),
         details.hypothesis,
+      ];
+
+      if (details.experiment) {
+        sections.push(
+          "",
+          theme.fg("accent", theme.bold("Why This Experiment")),
+          details.experiment.rationale,
+          "",
+          theme.fg("accent", theme.bold("Experimental Design")),
+          details.experiment.design,
+          "",
+          theme.fg("accent", theme.bold("Key Variables")),
+          ...details.experiment.variables.map((variable) => formatVariable(variable)),
+          "",
+          theme.fg("accent", theme.bold("Key Parameters")),
+          ...details.experiment.parameters.map((parameter) => formatParameter(parameter)),
+        );
+      }
+
+      sections.push(
         "",
-        theme.fg("success", theme.bold("Observation")),
+        theme.fg("success", theme.bold("Main Result")),
         details.observation,
+      );
+      if (details.analysis) {
+        sections.push("", theme.fg("accent", theme.bold("Analysis")), details.analysis);
+      }
+      sections.push(
         "",
         theme.fg("warning", theme.bold("Uncertainty")),
         details.uncertainty,
         "",
         theme.fg("accent", theme.bold("Next")),
         details.next,
-      ].join("\n");
-      container.addChild(new Text(text, 0, 0));
+      );
+      container.addChild(new Text(sections.join("\n"), 0, 0));
 
       const results = details.results ?? [];
       if (results.length > 0) {
@@ -528,6 +598,16 @@ async function previewParquet(
     : data.columnCount > data.columns.length ? `; showing first ${data.columns.length} columns` : "";
   const shapeLabel = sampleShard ? "Sample shard shape" : "Shape";
   return `${shapeLabel}: ${data.rowCount} rows x ${data.columnCount} columns${columnLabel}\n\n${header}${rows ? `\n${rows}` : ""}`;
+}
+
+function formatVariable(variable: ExperimentVariable): string {
+  const value = variable.value ? ` = ${variable.value}` : "";
+  return `- ${variable.name} [${variable.role}]${value}: ${variable.description}`;
+}
+
+function formatParameter(parameter: ExperimentParameter): string {
+  const rationale = parameter.rationale ? ` - ${parameter.rationale}` : "";
+  return `- ${parameter.name} = ${parameter.value}${rationale}`;
 }
 
 function formatCheckpointCell(value: unknown): string {

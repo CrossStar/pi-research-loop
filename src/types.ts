@@ -34,9 +34,33 @@ export interface CheckpointResult {
   preview?: string;
 }
 
+export type ExperimentVariableRole = "independent" | "dependent" | "control" | "derived";
+
+export interface ExperimentVariable {
+  name: string;
+  role: ExperimentVariableRole;
+  description: string;
+  value?: string;
+}
+
+export interface ExperimentParameter {
+  name: string;
+  value: string;
+  rationale?: string;
+}
+
+export interface ExperimentDetails {
+  rationale: string;
+  design: string;
+  variables: ExperimentVariable[];
+  parameters: ExperimentParameter[];
+}
+
 export interface CheckpointDetails {
   hypothesis: string;
+  experiment?: ExperimentDetails;
   observation: string;
+  analysis: string;
   uncertainty: string;
   next: string;
   actionCount: number;

@@ -154,7 +154,9 @@ Research Checkpoint 是人类重新获得控制权的主要机制。
 
 插件必须注册一个 `research_checkpoint` tool，使 Agent 能够明确表示当前一个研究片段已经结束。
 
-Checkpoint 至少应该包含当前假设、刚刚获得的观察结果、仍然存在的不确定性以及建议的下一步行动。
+Checkpoint 至少应该包含当前假设、实验动机与设计、关键变量和参数、主要结果、对结果的分析、仍然存在的不确定性以及建议的下一步行动。
+
+实验型 checkpoint 应明确区分“实验观察到了什么”和“如何解释这个观察”，避免把事实、推断和限制混在同一段文本中。
 
 一个典型 checkpoint 应表达：
 
@@ -162,15 +164,35 @@ Checkpoint 至少应该包含当前假设、刚刚获得的观察结果、仍然
 Hypothesis
 Reward 可能主要受到 response length 影响。
 
-Observation
-当前样本中 reward 与 response length 的 Pearson correlation 为 0.71。
+Why This Experiment
+需要通过保持回答内容不变的配对比较，判断长度是否会单独改变 reward。
+
+Experimental Design
+对同一回答构造原始版本和增加中性冗余文本的版本，并比较配对 reward 差值。
+
+Key Variables
+- response_variant [independent] = original vs extended
+- reward_delta [dependent]
+- semantic_content [control] = fixed
+
+Key Parameters
+- sample_size = 30
+- temperature = 0
+
+Main Result
+增加中性文本后平均 reward 提高 0.08。
+
+Analysis
+结果支持 evaluator 对 response length 敏感，但尚不能排除格式变化造成的影响。
 
 Uncertainty
-目前只能证明相关性，尚未控制其他变量。
+尚未使用等 token 数但不同格式的对照条件。
 
 Next
 固定 response length 后重新比较 reward。
 ```
+
+非实验型 Decision 或 Stagnation checkpoint 可以省略实验结构，但仍应清楚区分 observation、analysis 和 uncertainty。
 
 Checkpoint 不只是输出一段文本。
 

@@ -42,9 +42,45 @@ RESEARCH OFF
 
 Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显的长任务入口，同时要求 Agent 优先做最小实验。
 
-`research_checkpoint` 是 terminating tool。Agent 调用后会展示 hypothesis、observation、uncertainty 和 next，并结束当前连续执行循环。
+`research_checkpoint` 是 terminating tool。实验型 checkpoint 按以下顺序展示：Hypothesis、Why This Experiment、Experimental Design、Key Variables、Key Parameters、Main Result、Analysis、Uncertainty 和 Next。非实验型 decision/stagnation checkpoint 可以省略 `experiment`。
 
-Checkpoint 不会自动附加刚生成的文件。Agent 只能通过结构化 `results` 提交自己能够解释的结果：
+```json
+{
+  "hypothesis": "通用安全声明会提高 evaluator score",
+  "experiment": {
+    "rationale": "检验 evaluator 是否奖励表面安全措辞",
+    "design": "对相同回答进行有无安全声明的配对比较",
+    "variables": [
+      {
+        "name": "disclaimer",
+        "role": "independent",
+        "description": "是否添加安全声明",
+        "value": "absent vs present"
+      },
+      {
+        "name": "score_delta",
+        "role": "dependent",
+        "description": "配对评分变化"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "sample_size",
+        "value": "30",
+        "rationale": "用于第一轮小规模 probe"
+      }
+    ]
+  },
+  "observation": "平均配对评分提高 0.08",
+  "analysis": "结果支持 evaluator 对表面安全措辞敏感，但尚未排除长度效应",
+  "uncertainty": "尚未运行等长度中性前缀对照",
+  "next": "运行中性前缀对照实验"
+}
+```
+
+`variables` 的 role 支持 `independent`、`dependent`、`control` 和 `derived`。只记录影响实验解释的关键变量与参数，不倾倒完整运行配置。
+
+Checkpoint 不会自动附加刚生成的文件。Agent 只能通过结构化 `results` 提交自己能够解释的 supporting results：
 
 ```json
 {
