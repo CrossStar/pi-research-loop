@@ -78,7 +78,7 @@ V1 至少提供三种状态：
 
 `fast` 是本项目最重要的模式。
 
-Fast Mode 下，Agent 应以研究探索速度为第一优先级。它应该寻找当前问题的最小可执行验证，而不是主动提高整个项目的工程质量。
+Fast Mode 下，Agent 应以研究探索速度为第一优先级。它应该寻找不削弱当前科学主张的最小可执行验证，而不是主动提高整个项目的工程质量。对于复现或基准对比，reference protocol 的忠实度高于节省运行成本。
 
 `normal` 模式保留 Research Loop 的 checkpoint、artifact 和执行边界能力，但降低对防御性操作的限制，使 Agent 可以进行更完整的验证。
 
@@ -94,9 +94,13 @@ Fast Governor 是 V1 的核心模块。
 
 它同时通过 Prompt Policy 和 Tool Policy 影响 Agent。
 
-Prompt Policy 负责告诉模型什么样的行为是当前阶段需要的。Agent 应优先采用最小实验、针对性检查、小范围修改和能够快速产生信息的工具调用。
+Prompt Policy 负责告诉模型什么样的行为是当前阶段需要的。Agent 应优先采用最小实验、针对性检查、小范围修改和能够快速产生信息的工具调用，但最小化不能改变实验所声称回答的问题。
 
-Tool Policy 则负责处理模型没有遵守这一原则的情况。
+复现、基准对比和 reference-result 任务必须采用 fidelity-first。数据范围与 split、sampling、preprocessing、model/checkpoint、objective、evaluation protocol、seeds/repeats 和关键超参都属于科学协议。Agent 不得为了节省时间或成本静默改变这些条件。
+
+小样本 wiring 或 smoke test 只能作为独立 diagnostic。Agent 必须在执行前披露 reference scope、proposed scope、修改理由和推断限制，并获得用户明确批准；diagnostic 结果不能替代或冒充官方复现结果。
+
+Tool Policy 则负责处理模型没有遵守这一原则的情况。对于明确的复现执行请求，常见的 sample/data-scope reduction 应被拦截，除非用户已经明确授权 diagnostic scope。
 
 例如，在没有明显理由时，Agent 如果准备运行整个 repository 的测试套件，Fast Governor 应阻止这次操作，并要求 Agent 使用更小的 targeted test。
 
@@ -156,7 +160,9 @@ Research Checkpoint 是人类重新获得控制权的主要机制。
 
 Checkpoint 应是一份紧凑的研究报告，而不是固定字段摘要。整体结构为 Checkpoint Title、Research Question、Condition & Result、Overall Analysis、Uncertainty、Next 和 Relevant Artifacts。
 
-`Condition & Result` 按执行顺序包含从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验应分别说明为什么需要它、条件与控制、观察结果、结构化结果表和局部分析，不应重复更早实验或把计划中的实验写成已完成实验。
+`Condition & Result` 按执行顺序包含从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验应分别说明为什么需要它、条件与控制、protocol provenance、观察结果、结构化结果表和局部分析，不应重复更早实验或把计划中的实验写成已完成实验。
+
+每个实验必须声明 `reproduction|diagnostic|exploratory|ablation` intent 和实际 data scope。复现实验还应给出 reference，并逐项列出所有 protocol deviations 的 reference value、actual value、原因、推断限制和执行前用户批准状态。Deviation 表必须在终端中醒目展示；没有批准的 diagnostic 不能被总结为 reproduction evidence。
 
 一个典型 checkpoint 应表达：
 

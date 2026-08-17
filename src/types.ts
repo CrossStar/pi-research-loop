@@ -88,8 +88,26 @@ export interface ExperimentResultTable {
   rows: ResultTableCell[][];
 }
 
+export type ExperimentIntent = "reproduction" | "diagnostic" | "exploratory" | "ablation";
+
+export interface ProtocolDeviation {
+  field: string;
+  reference: string;
+  actual: string;
+  reason: string;
+  approvedByUser: boolean;
+}
+
+export interface ExperimentProtocol {
+  intent: ExperimentIntent;
+  reference?: string;
+  dataScope: string;
+  deviations: ProtocolDeviation[];
+}
+
 export interface CheckpointExperiment extends ExperimentDetails {
   title: string;
+  protocol?: ExperimentProtocol;
   observation: string;
   tables: ExperimentResultTable[];
   analysis: string;

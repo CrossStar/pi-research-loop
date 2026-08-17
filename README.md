@@ -40,13 +40,15 @@ RESEARCH FAST | CHECKPOINT REACHED | RESULTS 2
 RESEARCH OFF
 ```
 
-Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显的长任务入口，同时要求 Agent 优先做最小实验。
+Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显无关的长任务入口，同时要求 Agent 优先做不削弱科学主张的最小实验。它不允许为了节省成本而静默改变复现协议。
 
 `research_checkpoint` 是 terminating tool。它输出一份研究报告，而不是固定字段摘要：Checkpoint Title、Research Question、Condition & Result、Overall Analysis、Uncertainty、Next 和 Relevant Artifacts。
 
 启用 Research Mode 不等于每项任务都需要 checkpoint。Agent 必须先判断当前用户请求是否让它实际开展了科研实验；只有至少一个实验已经运行后，Agent 才根据 evidence、decision branch、uncertainty、stagnation 和下一实验成本自主判断是否 checkpoint。普通对话、问题回答、规划、代码维护、文档修改和用于验证软件改动的测试都不具备 checkpoint 资格。尚未运行实验时若需要成本批准，应使用普通回复询问用户。
 
-`experiments` 是必填字段，按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
+复现、基准对比和 reference-result 任务采用 fidelity-first：reference 的数据范围与 split、采样、预处理、模型/checkpoint、objective、评估协议、seeds/repeats 和关键超参都是科学协议的一部分。Agent 不得静默缩小或更改这些条件。小样本 wiring/smoke test 必须作为独立的 `diagnostic` 实验，运行前披露 reference 与 proposed scope、用途和推断限制并获得用户明确批准，结果也不能当作官方复现 evidence。
+
+`experiments` 是必填字段，按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、protocol provenance、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
 
 ```json
 {
@@ -56,6 +58,11 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
   "experiments": [
     {
       "title": "Neutral Response Extension",
+      "protocol": {
+        "intent": "exploratory",
+        "dataScope": "30 paired responses from the fixed evaluation split",
+        "deviations": []
+      },
       "rationale": "检验初始 length association",
       "design": "对 30 组 original/extended response 进行配对评分",
       "setup": [
@@ -83,6 +90,8 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
   "next": "使用多个独立 filler family 重复 length sweep"
 }
 ```
+
+每个实验的 `protocol` 必填：`intent` 为 `reproduction|diagnostic|exploratory|ablation`，`dataScope` 必须写实际 dataset、split、sample count 和 sampling scope；复现任务还应填写 `reference`。所有 protocol deviation 都必须结构化记录 reference、actual、原因、推断限制和是否在执行前获得用户批准，并在终端中以醒目的 Protocol Deviations 表展示。
 
 `setup`、`variables` 和 `parameters` 是可选的结构化实验细节。Setup 用于 Model、Dataset、Loss、Optimizer、Evaluation protocol 等理解 evidence 所需的信息；`parameters` 只记录实验超参。Slurm partition、QoS、节点数、walltime、日志和调度参数不会展示，除非研究问题本身就是系统性能或调度行为。
 

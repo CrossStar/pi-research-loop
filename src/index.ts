@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Type } from "typebox";
 import { ArtifactRadar, formatSize, loadArtifactPreview, resolveArtifactRecord } from "./artifacts.js";
-import { evaluateFastCommand, researchPolicy, type ResearchMode } from "./governor.js";
+import { evaluateFastCommand, evaluateResearchFidelity, researchPolicy, type ResearchMode } from "./governor.js";
 import { formatSignificant, formatTable } from "./table.js";
 import type {
   ArtifactRecord,
@@ -164,10 +164,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. Never checkpoint ordinary conversation, planning, code maintenance, or software validation. Report all key experiments completed in that research interval, then synthesize analysis, uncertainty, and next actions. Call this alone as the final tool action.",
+      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. Never checkpoint ordinary conversation, planning, code maintenance, or software validation. For every experiment, disclose scientific intent, actual data scope, reference protocol, and all deviations; a diagnostic must never be presented as reproduction evidence. Call this alone as the final tool action.",
     promptSnippet: "End a research interval with a multi-experiment report and return control",
     promptGuidelines: [
-      "First decide whether the user asked you to conduct empirical research and whether at least one experiment was actually run. Only then may you autonomously decide to checkpoint based on evidence, uncertainty, branching, or cost. Do not checkpoint discussion, planning, implementation work, or tests that merely validate software changes. When eligible, write a report with Research Question, Condition & Result, Overall Analysis, Uncertainty, Next, and Relevant Artifacts.",
+      "First decide whether the user asked you to conduct empirical research and whether at least one experiment was actually run. Only then may you autonomously decide to checkpoint. For each completed experiment, classify it as reproduction, diagnostic, exploratory, or ablation; state actual data scope and every reference-protocol deviation with prior user approval status. Never use a reduced diagnostic as evidence that an official reproduction succeeded.",
     ],
     parameters: Type.Object({
       title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
@@ -176,6 +176,23 @@ export default function researchLoop(pi: ExtensionAPI): void {
       experiments: Type.Array(
           Type.Object({
             title: Type.String({ description: "Short experiment name, without numbering" }),
+            protocol: Type.Object({
+              intent: StringEnum(["reproduction", "diagnostic", "exploratory", "ablation"] as const, {
+                description: "Scientific intent. A diagnostic cannot be presented as reproduction evidence.",
+              }),
+              reference: Type.Optional(Type.String({ description: "Reference paper, official run, baseline, or protocol being followed" })),
+              dataScope: Type.String({ description: "Actual dataset, split, sample count, and sampling scope used" }),
+              deviations: Type.Array(
+                Type.Object({
+                  field: Type.String({ description: "Protocol field that differs, such as sample count, split, model, preprocessing, or seeds" }),
+                  reference: Type.String({ description: "Reference protocol value" }),
+                  actual: Type.String({ description: "Value actually used" }),
+                  reason: Type.String({ description: "Why the deviation was made and what it limits" }),
+                  approvedByUser: Type.Boolean({ description: "Whether the user explicitly approved this deviation before execution" }),
+                }),
+                { maxItems: 12, description: "All deviations from the referenced protocol; empty only when none exist" },
+              ),
+            }),
             rationale: Type.String({ description: "Why this experiment was needed in the research sequence" }),
             design: Type.String({ description: "Self-contained narrative of conditions, controls, sample, and comparison" }),
             setup: Type.Optional(
@@ -363,6 +380,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
           const experimentDetails = formatExperimentDetails(experiment);
           if (experimentDetails) {
             container.addChild(new Text(`${theme.bold("Experimental Details")}\n${experimentDetails}`, 0, 1));
+          }
+          const protocolDeviations = formatProtocolDeviations(experiment);
+          if (protocolDeviations) {
+            container.addChild(new Text(`${theme.fg("warning", theme.bold("Protocol Deviations"))}\n${protocolDeviations}`, 0, 1));
           }
           container.addChild(new Text(experiment.observation, 0, 1));
           experiment.tables.forEach((table) => {
@@ -646,6 +667,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
     }
 
     toolCallsThisTurn += 1;
+    const fidelityDecision = evaluateResearchFidelity(event.toolName, event.input, currentUserPrompt);
+    if (fidelityDecision.block) return { block: true, reason: fidelityDecision.reason };
+
     if (state.mode === "fast" && event.toolName === "bash") {
       const command = (event.input as { command?: string }).command ?? "";
       const decision = evaluateFastCommand(command, currentUserPrompt);
@@ -763,6 +787,8 @@ function formatCheckpointReport(details: CheckpointDetails): string {
       ];
       const experimentDetails = formatExperimentDetails(experiment);
       if (experimentDetails) parts.push(`Experimental Details\n\n${experimentDetails}`);
+      const protocolDeviations = formatProtocolDeviations(experiment);
+      if (protocolDeviations) parts.push(`Protocol Deviations\n\n${protocolDeviations}`);
       parts.push(experiment.observation);
       experiment.tables.forEach((table) => {
         parts.push(table.title ? `${table.title}\n\n${formatResultTable(table)}` : formatResultTable(table));
@@ -794,7 +820,19 @@ function formatCheckpointReport(details: CheckpointDetails): string {
 }
 
 function formatExperimentDetails(experiment: CheckpointExperiment): string | undefined {
+  const protocolRows = experiment.protocol
+    ? [
+        ["Protocol", "Intent", experiment.protocol.intent, "Scientific role of this run"],
+        ["Protocol", "Data scope", experiment.protocol.dataScope, "Actual data used"],
+        ...(experiment.protocol.reference
+          ? [["Protocol", "Reference", experiment.protocol.reference, "Target protocol or result"]]
+          : experiment.protocol.intent === "reproduction"
+            ? [["Protocol", "Reference", "MISSING", "Reproduction reference was not supplied"]]
+            : []),
+      ]
+    : [];
   const rows = [
+    ...protocolRows,
     ...experiment.setup.map((detail) => ["Setup", detail.name, detail.value, detail.description ?? ""]),
     ...experiment.variables.map((variable) => [
       variable.role,
@@ -811,6 +849,21 @@ function formatExperimentDetails(experiment: CheckpointExperiment): string | und
   ];
   if (rows.length === 0) return undefined;
   return formatTable(["Type", "Name", "Value / Levels", "Why it matters"], rows);
+}
+
+function formatProtocolDeviations(experiment: CheckpointExperiment): string | undefined {
+  const deviations = experiment.protocol?.deviations ?? [];
+  if (deviations.length === 0) return undefined;
+  return formatTable(
+    ["Field", "Reference", "Actual", "Reason / Limit", "Approved"],
+    deviations.map((deviation) => [
+      deviation.field,
+      deviation.reference,
+      deviation.actual,
+      deviation.reason,
+      deviation.approvedByUser ? "yes" : "NO",
+    ]),
+  );
 }
 
 function formatResultTable(table: ExperimentResultTable): string {
