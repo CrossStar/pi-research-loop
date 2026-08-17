@@ -12,18 +12,26 @@ export function formatTable(headers: string[], rows: string[][], maxCellWidth = 
   return [renderRow(normalizedHeaders), separator, ...normalizedRows.map(renderRow)].join("\n");
 }
 
-export function formatSignificant(value: number, significantDigits = 4): string {
+export function formatSignificant(
+  value: number,
+  significantDigits = 4,
+  preserveTrailingZeros = false,
+): string {
   if (!Number.isFinite(value)) return String(value);
-  if (value === 0) return "0";
+  if (value === 0) return preserveTrailingZeros ? value.toPrecision(significantDigits) : "0";
 
   const digits = Math.min(8, Math.max(1, significantDigits));
   const magnitude = Math.floor(Math.log10(Math.abs(value)));
   if (magnitude >= digits || magnitude <= -4) {
-    return trimMantissa(value.toExponential(digits - 1));
+    const formatted = value.toExponential(digits - 1);
+    return preserveTrailingZeros ? formatted : trimMantissa(formatted);
   }
 
   const decimalPlaces = Math.max(0, digits - magnitude - 1);
-  return value.toFixed(decimalPlaces).replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, "").replace(/\.$/, "");
+  const formatted = value.toFixed(decimalPlaces);
+  return preserveTrailingZeros
+    ? formatted
+    : formatted.replace(/\.0+$|(?<=\.[0-9]*?)0+$/g, "").replace(/\.$/, "");
 }
 
 function normalizeCell(value: string, maxWidth: number): string {

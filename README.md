@@ -42,64 +42,49 @@ RESEARCH OFF
 
 Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显的长任务入口，同时要求 Agent 优先做最小实验。
 
-`research_checkpoint` 是 terminating tool。`experiment` 只描述从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的关键实验，不回顾更早实验，也不描述尚未运行的下一步实验。实验型 checkpoint 按以下顺序展示：Hypothesis、Why This Experiment、Experimental Design、Experimental Setup、Key Variables、Experiment Hyperparameters、Main Result、Headline Metrics、Analysis、Uncertainty 和 Next。非实验型 decision/stagnation checkpoint 可以省略 `experiment`。
+`research_checkpoint` 是 terminating tool。它输出一份研究报告，而不是固定字段摘要：Checkpoint Title、Research Question、Condition & Result、Overall Analysis、Uncertainty、Next 和 Relevant Artifacts。
+
+`experiments` 按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
 
 ```json
 {
-  "hypothesis": "通用安全声明会提高 evaluator score",
-  "experiment": {
-    "rationale": "检验 evaluator 是否奖励表面安全措辞",
-    "design": "对相同回答进行有无安全声明的配对比较",
-    "setup": [
-      {
-        "name": "Evaluator",
-        "value": "safety-rm-v2",
-        "description": "被测试的安全评分模型"
-      },
-      {
-        "name": "Evaluation protocol",
-        "value": "paired scoring",
-        "description": "对同一回答主体进行配对比较"
-      }
-    ],
-    "variables": [
-      {
-        "name": "disclaimer",
-        "role": "independent",
-        "description": "是否添加安全声明",
-        "value": "absent vs present"
-      },
-      {
-        "name": "score_delta",
-        "role": "dependent",
-        "description": "配对评分变化"
-      }
-    ],
-    "parameters": [
-      {
-        "name": "sample_size",
-        "value": "30",
-        "rationale": "用于第一轮小规模 probe"
-      }
-    ]
-  },
-  "observation": "添加安全声明后，多数样本的评分上升",
-  "metrics": [
+  "title": "Response Length May Bias Safety Reward",
+  "researchQuestion": "reward 变化来自 response length，还是语义和格式？",
+  "hypothesis": "增加 response length 本身可能提高 reward",
+  "experiments": [
     {
-      "name": "mean_score_delta",
-      "value": 0.081734,
-      "baseline": 0,
-      "significantDigits": 3,
-      "note": "paired mean"
+      "title": "Neutral Response Extension",
+      "rationale": "检验初始 length association",
+      "design": "对 30 组 original/extended response 进行配对评分",
+      "setup": [
+        { "name": "Evaluator", "value": "safety-rm-v2" }
+      ],
+      "parameters": [
+        { "name": "temperature", "value": "0" }
+      ],
+      "observation": "23 组上升，5 组下降，2 组基本不变",
+      "tables": [
+        {
+          "columns": ["Response", "Mean Reward", "Mean Delta"],
+          "rows": [
+            [{ "text": "Original" }, { "value": 0.4123, "significantDigits": 4 }, { "text": "-" }],
+            [{ "text": "Extended" }, { "value": 0.494, "significantDigits": 4 }, { "value": 0.0817, "significantDigits": 4 }]
+          ]
+        }
+      ],
+      "analysis": "结果支持 length-associated effect，但还没有隔离 filler semantics"
     }
   ],
-  "analysis": "结果支持 evaluator 对表面安全措辞敏感，但尚未排除长度效应",
-  "uncertainty": "尚未运行等长度中性前缀对照",
-  "next": "运行中性前缀对照实验"
+  "overallAnalysis": "跨实验综合判断 response length 比 formatting 更可能解释 reward 变化",
+  "conclusion": "当前最强结论，但不超出已有控制条件",
+  "uncertainty": "新增文本内容仍与 token count 混杂",
+  "next": "使用多个独立 filler family 重复 length sweep"
 }
 ```
 
-`setup` 用于 Model、Dataset、Loss、Optimizer、Evaluation protocol 等理解实验所需的关键细节。`variables` 的 role 支持 `independent`、`dependent`、`control` 和 `derived`。`parameters` 只记录实验超参；Slurm partition、QoS、节点数、walltime、日志和调度参数不会展示，除非研究问题本身就是系统性能或调度行为。`metrics` 以终端表格展示，并按 `significantDigits` 控制有效位数。
+`setup`、`variables` 和 `parameters` 是可选的结构化实验细节。Setup 用于 Model、Dataset、Loss、Optimizer、Evaluation protocol 等理解 evidence 所需的信息；`parameters` 只记录实验超参。Slurm partition、QoS、节点数、walltime、日志和调度参数不会展示，除非研究问题本身就是系统性能或调度行为。
+
+`tables` 支持每个实验最多 4 张、每张最多 6 列和 20 行的任意结果表。数值 cell 使用 `value`，并可通过 `significantDigits` 保留有意义的精度和尾零；非数值 cell 使用 `text`。CSV/Parquet artifact 仍提供有界 terminal preview。
 
 Checkpoint 不会自动附加刚生成的文件。Agent 只能通过结构化 `results` 提交自己能够解释的 supporting results：
 
@@ -110,7 +95,8 @@ Checkpoint 不会自动附加刚生成的文件。Agent 只能通过结构化 `r
   "role": "dataset",
   "description": "本轮最小实验生成的逐样本数据",
   "takeaway": "用于检查 reward 与 response length 的关系",
-  "columns": ["reward", "response_length", "prompt_id"]
+  "columns": ["reward", "response_length", "prompt_id"],
+  "experiment": "Controlled Length Sweep"
 }
 ```
 

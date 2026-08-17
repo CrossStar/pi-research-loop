@@ -154,64 +154,60 @@ Research Checkpoint 是人类重新获得控制权的主要机制。
 
 插件必须注册一个 `research_checkpoint` tool，使 Agent 能够明确表示当前一个研究片段已经结束。
 
-Checkpoint 至少应该包含当前假设、实验动机与设计、理解实验所需的关键 setup、关键变量、实验超参、结构化结果、对结果的分析、仍然存在的不确定性以及建议的下一步行动。
+Checkpoint 应是一份紧凑的研究报告，而不是固定字段摘要。整体结构为 Checkpoint Title、Research Question、Condition & Result、Overall Analysis、Uncertainty、Next 和 Relevant Artifacts。
 
-这里的实验只指从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的关键实验，不应重复更早的实验，也不应把尚未运行的下一步实验写成当前实验。
-
-实验型 checkpoint 应明确区分“实验观察到了什么”和“如何解释这个观察”，避免把事实、推断和限制混在同一段文本中。
+`Condition & Result` 按执行顺序包含从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验应分别说明为什么需要它、条件与控制、观察结果、结构化结果表和局部分析，不应重复更早实验或把计划中的实验写成已完成实验。
 
 一个典型 checkpoint 应表达：
 
 ```text
-Hypothesis
-Reward 可能主要受到 response length 影响。
+Checkpoint: Response Length May Bias Safety Reward
 
-Why This Experiment
-需要通过保持回答内容不变的配对比较，判断长度是否会单独改变 reward。
+Research Question
+Reward 变化来自 response length，还是来自语义内容与格式？
+当前假设是增加 response length 本身可能提高 reward。
 
-Experimental Design
-对同一回答构造原始版本和增加中性冗余文本的版本，并比较配对 reward 差值。
+Condition & Result
 
-Experimental Setup
-Component            | Value          | Why it matters
----------------------+----------------+------------------------
-Evaluator            | safety-rm-v2   | 被测试的评分模型
-Evaluation protocol  | paired scoring | 固定回答主体进行配对比较
+Experiment 1 - Neutral Response Extension
+对 30 组 original/extended responses 进行配对评分。
 
-Key Variables
-- response_variant [independent] = original vs extended
-- reward_delta [dependent]
-- semantic_content [control] = fixed
+Response   | Mean Reward | Delta
+-----------+-------------+-------
+Original   | 0.4123      | -
+Extended   | 0.4940      | 0.0817
 
-Experiment Hyperparameters
-Hyperparameter  | Value | Why it matters
-----------------+-------+------------------------
-sample_size     | 30    | 第一轮小规模 probe
-temperature     | 0     | 降低随机性
+结果支持 length-associated effect，但尚未隔离 filler semantics。
 
-Main Result
-增加中性文本后 reward 整体上升。
+Experiment 2 - Equal-Length Formatting Control
+保持 token count 基本相等，仅改变 formatting。
 
-Headline Metrics
-Metric             | Value  | Baseline | Change | Note
--------------------+--------+----------+--------+------------
-mean_reward_delta  | 0.0817 | 0        | 0.0817 | paired mean
+Response     | Mean Reward | Delta
+-------------+-------------+-------
+Plain        | 0.4871      | -
+Reformatted  | 0.4914      | 0.0043
 
-Analysis
-结果支持 evaluator 对 response length 敏感，但尚不能排除格式变化造成的影响。
+该结果削弱 formatting 是主要解释的假设。
+
+Overall Analysis
+跨实验综合判断 response length 比 formatting 更可能解释 reward 变化。
 
 Uncertainty
-尚未使用等 token 数但不同格式的对照条件。
+新增文本内容仍与 token count 混杂。
 
 Next
-固定 response length 后重新比较 reward。
+使用多个独立 filler family 重复 length sweep。
+
+Relevant Artifacts
+- results/reward_length_sweep.json
+- figures/reward_length_sweep.png
 ```
 
-Setup 应包括理解实验所需的 Model、Dataset、Loss、Optimizer、Evaluation protocol 等关键细节。Experiment Hyperparameters 只包括实验本身的参数；Slurm partition、QoS、节点数、walltime、日志和调度参数不应进入该表，除非研究问题本身就是系统性能或调度行为。
+Setup、variables 和 experiment hyperparameters 只在理解 evidence 所必需时显示，并用紧凑表格呈现。Setup 可包括 Model、Dataset、Loss、Optimizer 和 Evaluation protocol。Slurm partition、QoS、节点数、walltime、日志和调度参数不应进入实验细节，除非研究问题本身就是系统性能或调度行为。
 
-数值 headline results 应以结构化 metrics 表格展示，并按测量精度保留适当有效位数。CSV/Parquet supporting results 也应在终端中直接显示有界表格 preview。
+每个实验可以提供多张结构化结果表。数值 cell 应按测量精度保留适当有效位数；CSV/Parquet supporting results 在终端中直接显示有界 preview，图片应内联到其关联的实验下。所有 curated artifacts 在报告末尾统一列出。
 
-非实验型 Decision 或 Stagnation checkpoint 可以省略实验结构，但仍应清楚区分 observation、analysis 和 uncertainty。
+非实验型 Decision 或 Stagnation checkpoint 可以省略 `Condition & Result`，但仍应给出 Research Question、Overall Analysis、Uncertainty 和 Next。
 
 Checkpoint 不只是输出一段文本。
 

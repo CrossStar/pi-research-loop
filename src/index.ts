@@ -10,12 +10,15 @@ import { formatSignificant, formatTable } from "./table.js";
 import type {
   ArtifactRecord,
   CheckpointDetails,
+  CheckpointExperiment,
   CheckpointMetric,
   CheckpointResult,
   ExperimentDetails,
   ExperimentParameter,
+  ExperimentResultTable,
   ExperimentSetupDetail,
   ExperimentVariable,
+  ResultTableCell,
   ResearchResultRole,
   ResearchState,
 } from "./types.js";
@@ -31,6 +34,7 @@ interface CheckpointResultInput {
   description: string;
   takeaway?: string;
   columns?: string[];
+  experiment?: string;
 }
 
 export default function researchLoop(pi: ExtensionAPI): void {
@@ -133,6 +137,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
         description: requested.description,
         takeaway: requested.takeaway,
         columns: requested.columns,
+        experiment: requested.experiment,
       };
 
       if (requested.role !== "intermediate") {
@@ -159,101 +164,126 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "End the current research round and return control to the user. The experiment is the key experiment completed since the previous checkpoint or user calibration. Report rationale/design, essential setup such as model/data/loss/optimizer/evaluation, key variables, experiment-only hyperparameters, structured metrics, analysis, uncertainty, and next action. Exclude Slurm and infrastructure settings unless they are the research subject. Call this alone as the final tool action.",
-    promptSnippet: "End a research round with structured evidence and return control to the user",
+      "End the current research interval with a report-style checkpoint. Cover all key experiments completed since the previous checkpoint or user calibration, each with its own condition, structured result tables, analysis, and linked artifacts. Then synthesize overall analysis, uncertainty, and next actions. Exclude Slurm and infrastructure settings unless systems behavior is under study. Call this alone as the final tool action.",
+    promptSnippet: "End a research interval with a multi-experiment report and return control",
     promptGuidelines: [
-      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. Summarize the key experiment completed since the previous checkpoint: include essential setup, variables, experiment-only hyperparameters, structured metrics, and separate result from analysis. Do not report Slurm or infrastructure parameters unless the experiment studies systems behavior.",
+      "Write a report-style checkpoint with Research Question, Condition & Result, Overall Analysis, Uncertainty, Next, and Relevant Artifacts. Include every key experiment completed since the previous checkpoint, in execution order. Use structured tables for quantitative comparisons and associate artifacts with the experiment they support. Do not report Slurm or infrastructure parameters unless the research question studies systems behavior.",
     ],
     parameters: Type.Object({
-      hypothesis: Type.String({ description: "The hypothesis currently being tested" }),
-      experiment: Type.Optional(
-        Type.Object({
-          rationale: Type.String({ description: "Why this experiment was necessary for the current hypothesis" }),
-          design: Type.String({ description: "Concise experimental setup and comparison being made" }),
-          setup: Type.Array(
-            Type.Object({
-              name: Type.String({ description: "Essential setup component such as model, dataset, loss, optimizer, or evaluation protocol" }),
-              value: Type.String({ description: "Component choice or configuration" }),
-              description: Type.Optional(Type.String({ description: "Why this detail matters for understanding the experiment" })),
-            }),
-            { minItems: 1, maxItems: 12, description: "Essential experiment context, not infrastructure configuration" },
-          ),
-          variables: Type.Array(
-            Type.Object({
-              name: Type.String({ description: "Variable name" }),
-              role: StringEnum(["independent", "dependent", "control", "derived"] as const),
-              description: Type.String({ description: "What the variable represents in this experiment" }),
-              value: Type.Optional(Type.String({ description: "Fixed value, levels, or range when useful" })),
-            }),
-            { minItems: 1, maxItems: 12, description: "Key variables needed to interpret the experiment" },
-          ),
-          parameters: Type.Array(
-            Type.Object({
-              name: Type.String({ description: "Parameter name" }),
-              value: Type.String({ description: "Parameter value used" }),
-              rationale: Type.Optional(Type.String({ description: "Why this value matters" })),
-            }),
-            {
-              minItems: 1,
-              maxItems: 12,
-              description: "Experiment hyperparameters only. Exclude Slurm, queue, GPU allocation, logging, and orchestration settings unless they are under study.",
-            },
-          ),
-        }),
-      ),
-      observation: Type.String({ description: "The main experimental result, stated separately from interpretation" }),
-      metrics: Type.Optional(
+      title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
+      researchQuestion: Type.String({ description: "Research question and the distinction this interval is trying to resolve" }),
+      hypothesis: Type.String({ description: "Current working hypothesis after considering this interval's evidence" }),
+      experiments: Type.Optional(
         Type.Array(
           Type.Object({
-            name: Type.String({ description: "Metric name" }),
-            value: Type.Number({ description: "Numeric metric value" }),
-            unit: Type.Optional(Type.String({ description: "Metric unit" })),
-            baseline: Type.Optional(Type.Number({ description: "Baseline or control value when directly comparable" })),
-            change: Type.Optional(Type.Number({ description: "Reported absolute or relative change; clarify in note" })),
-            changeUnit: Type.Optional(Type.String({ description: "Unit for change when different from the metric value" })),
-            significantDigits: Type.Optional(
-              Type.Integer({ minimum: 1, maximum: 8, description: "Significant digits justified by the measurement" }),
+            title: Type.String({ description: "Short experiment name, without numbering" }),
+            rationale: Type.String({ description: "Why this experiment was needed in the research sequence" }),
+            design: Type.String({ description: "Self-contained narrative of conditions, controls, sample, and comparison" }),
+            setup: Type.Optional(
+              Type.Array(
+                Type.Object({
+                  name: Type.String({ description: "Essential setup component such as model, dataset, loss, optimizer, or evaluation protocol" }),
+                  value: Type.String({ description: "Component choice or configuration" }),
+                  description: Type.Optional(Type.String({ description: "Why this detail matters" })),
+                }),
+                { maxItems: 12, description: "Essential experiment context, excluding infrastructure" },
+              ),
             ),
-            note: Type.Optional(Type.String({ description: "Short comparison or interpretation aid, not the full analysis" })),
+            variables: Type.Optional(
+              Type.Array(
+                Type.Object({
+                  name: Type.String({ description: "Variable name" }),
+                  role: StringEnum(["independent", "dependent", "control", "derived"] as const),
+                  description: Type.String({ description: "What the variable represents" }),
+                  value: Type.Optional(Type.String({ description: "Fixed value, levels, or range" })),
+                }),
+                { maxItems: 12, description: "Variables necessary to interpret the experiment" },
+              ),
+            ),
+            parameters: Type.Optional(
+              Type.Array(
+                Type.Object({
+                  name: Type.String({ description: "Experiment hyperparameter name" }),
+                  value: Type.String({ description: "Value used" }),
+                  rationale: Type.Optional(Type.String({ description: "Why this value matters" })),
+                }),
+                {
+                  maxItems: 12,
+                  description: "Experiment-only hyperparameters. Exclude Slurm, queue, allocation, logging, and orchestration settings.",
+                },
+              ),
+            ),
+            observation: Type.String({ description: "Observed result before interpretation" }),
+            tables: Type.Optional(
+              Type.Array(
+                Type.Object({
+                  title: Type.Optional(Type.String({ description: "Short table title or lead-in" })),
+                  columns: Type.Array(Type.String(), { minItems: 1, maxItems: 6 }),
+                  rows: Type.Array(
+                    Type.Array(
+                      Type.Object({
+                        text: Type.Optional(Type.String({ description: "Text cell; use when the cell is not numeric" })),
+                        value: Type.Optional(Type.Number({ description: "Numeric cell value" })),
+                        unit: Type.Optional(Type.String({ description: "Optional unit appended to a numeric value" })),
+                        significantDigits: Type.Optional(
+                          Type.Integer({ minimum: 1, maximum: 8, description: "Significant digits justified by the measurement" }),
+                        ),
+                      }),
+                      { minItems: 1, maxItems: 6 },
+                    ),
+                    { maxItems: 20 },
+                  ),
+                }),
+                { maxItems: 4, description: "Structured result tables rendered directly in the terminal" },
+              ),
+            ),
+            analysis: Type.String({ description: "Interpretation, causal limits, and what this experiment adds" }),
           }),
-          { maxItems: 12, description: "Structured headline metrics shown as a terminal table" },
+          { minItems: 1, maxItems: 6, description: "Key experiments completed in this interval, in execution order" },
         ),
       ),
-      analysis: Type.String({ description: "Interpretation of the result and whether it supports the hypothesis" }),
-      uncertainty: Type.String({ description: "Limitations, confounders, and what remains unknown" }),
-      next: Type.String({ description: "One concrete next action for user calibration" }),
+      overallAnalysis: Type.String({ description: "Synthesis across experiments and how the evidence updates the hypothesis" }),
+      conclusion: Type.Optional(Type.String({ description: "Strongest conclusion currently justified, stated in one compact passage" })),
+      uncertainty: Type.String({ description: "Unresolved confounders, limitations, and generalization gaps" }),
+      next: Type.String({ description: "Concrete next experiment or user decision, including secondary priority when useful" }),
       results: Type.Optional(
         Type.Array(
           Type.Object({
             path: Type.String({ description: "Path to a result file or dataset directory" }),
-            title: Type.String({ description: "Human-readable name that explains what the result is" }),
+            title: Type.String({ description: "Human-readable artifact title" }),
             role: StringEnum(["evidence", "diagnostic", "dataset", "intermediate"] as const, {
-              description: "How this result participates in the current research checkpoint",
+              description: "How this artifact participates in the checkpoint",
             }),
-            description: Type.String({ description: "Why this result exists and how it relates to the hypothesis" }),
-            takeaway: Type.Optional(Type.String({ description: "What the user should notice in this result" })),
-            columns: Type.Optional(
-              Type.Array(Type.String(), {
-                maxItems: 6,
-                description: "Relevant table columns to preview, in display order",
-              }),
-            ),
+            description: Type.String({ description: "Why this artifact exists and how it relates to the evidence" }),
+            takeaway: Type.Optional(Type.String({ description: "What the user should notice" })),
+            columns: Type.Optional(Type.Array(Type.String(), { maxItems: 6, description: "Relevant preview columns" })),
+            experiment: Type.Optional(Type.String({ description: "Exact experiment title this artifact belongs to" })),
           }),
-          {
-            maxItems: 6,
-            description: "Curated results only. Omit files whose purpose is not understood.",
-          },
+          { maxItems: 8, description: "Curated artifacts only; omit files whose purpose is not understood" },
         ),
       ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const results = await prepareCheckpointResults(params.results, ctx);
+      const experiments = (params.experiments ?? []).map((experiment) =>
+        sanitizeCheckpointExperiment(
+          {
+            ...experiment,
+            setup: experiment.setup ?? [],
+            variables: experiment.variables ?? [],
+            parameters: experiment.parameters ?? [],
+            tables: experiment.tables ?? [],
+          },
+          params.hypothesis,
+        ),
+      );
       const details: CheckpointDetails = {
+        title: params.title,
+        researchQuestion: params.researchQuestion,
         hypothesis: params.hypothesis,
-        experiment: params.experiment ? sanitizeExperiment(params.experiment, params.hypothesis) : undefined,
-        observation: params.observation,
-        metrics: params.metrics ?? [],
-        analysis: params.analysis,
+        experiments,
+        overallAnalysis: params.overallAnalysis,
+        conclusion: params.conclusion,
         uncertainty: params.uncertainty,
         next: params.next,
         actionCount: roundActions,
@@ -264,36 +294,8 @@ export default function researchLoop(pi: ExtensionAPI): void {
       checkpointReviewPending = false;
       updateStatus(ctx);
       persistState();
-      const resultText = results
-        .map((result) => `${result.title} [${result.role}]\n${result.description}\n${result.absolutePath}`)
-        .join("\n\n");
-      const artifactText = resultText ? `\n\nSupporting Results\n${resultText}` : "";
-      const experimentText = details.experiment
-        ? [
-            `Why This Experiment\n${details.experiment.rationale}`,
-            `Experimental Design\n${details.experiment.design}`,
-            `Experimental Setup\n${formatSetupTable(details.experiment.setup ?? [])}`,
-            `Key Variables\n${formatVariableTable(details.experiment.variables)}`,
-            `Experiment Hyperparameters\n${formatParameterTable(details.experiment.parameters)}`,
-          ].join("\n\n")
-        : undefined;
-      const checkpointText = [
-        "Research checkpoint reached. Control returned to the user.",
-        `Hypothesis\n${details.hypothesis}`,
-        experimentText,
-        `Main Result\n${details.observation}`,
-        (details.metrics ?? []).length > 0 ? `Headline Metrics\n${formatMetricTable(details.metrics)}` : undefined,
-        `Analysis\n${details.analysis}`,
-        `Uncertainty\n${details.uncertainty}`,
-        `Next\n${details.next}`,
-      ].filter((section): section is string => Boolean(section)).join("\n\n");
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${checkpointText}${artifactText}`,
-          },
-        ],
+        content: [{ type: "text" as const, text: formatCheckpointReport(details) }],
         details,
         terminate: true,
       };
@@ -306,6 +308,110 @@ export default function researchLoop(pi: ExtensionAPI): void {
       if (!details) return new Text("Research checkpoint reached.", 0, 0);
 
       const container = new Container();
+      const appendResult = (researchResult: CheckpointResult, index: number) => {
+        const artifact = researchResult.artifact;
+        const label = `${index + 1}. ${researchResult.title}`;
+        const semantics = [
+          `${theme.fg("muted", researchResult.role.toUpperCase())} | ${researchResult.description}`,
+          researchResult.takeaway ? `${theme.fg("success", "Takeaway")} ${researchResult.takeaway}` : undefined,
+          terminalLink(researchResult.url, `${artifact.name} (${formatSize(artifact.size)})`),
+          theme.fg("muted", researchResult.absolutePath),
+        ].filter((line): line is string => Boolean(line));
+        container.addChild(new Text(`${theme.bold(label)}\n${semantics.join("\n")}`, 0, 1));
+
+        const image = checkpointImages.get(checkpointImageKey(artifact)) ?? radar?.getCachedImage(artifact);
+        if (image) {
+          container.addChild(
+            new Image(image.data, image.mimeType, { fallbackColor: (value) => theme.fg("muted", value) }, {
+              maxWidthCells: 72,
+              maxHeightCells: 24,
+              filename: artifact.name,
+            }),
+          );
+        } else if (researchResult.preview) {
+          container.addChild(new Text(researchResult.preview, 0, 1));
+        }
+      };
+
+      if (details.researchQuestion || details.experiments) {
+        const experiments = details.experiments ?? [];
+        const results = details.results ?? [];
+        container.addChild(new Text(theme.fg("accent", theme.bold(`Checkpoint: ${details.title ?? "Research Update"}`)), 0, 0));
+        container.addChild(new Text(theme.fg("accent", theme.bold("Research Question")), 0, 1));
+        container.addChild(
+          new Text(
+            [details.researchQuestion ?? "", "", theme.bold("Working hypothesis"), details.hypothesis].join("\n"),
+            0,
+            0,
+          ),
+        );
+
+        if (experiments.length > 0) {
+          container.addChild(new Text(theme.fg("accent", theme.bold("Condition & Result")), 0, 1));
+        }
+        experiments.forEach((experiment, experimentIndex) => {
+          container.addChild(
+            new Text(
+              [
+                theme.fg("accent", theme.bold(`Experiment ${experimentIndex + 1} - ${experiment.title}`)),
+                experiment.rationale,
+                "",
+                experiment.design,
+              ].join("\n"),
+              0,
+              1,
+            ),
+          );
+          const experimentDetails = formatExperimentDetails(experiment);
+          if (experimentDetails) {
+            container.addChild(new Text(`${theme.bold("Experimental Details")}\n${experimentDetails}`, 0, 1));
+          }
+          container.addChild(new Text(experiment.observation, 0, 1));
+          experiment.tables.forEach((table) => {
+            const title = table.title ? `${theme.bold(table.title)}\n` : "";
+            container.addChild(new Text(`${title}${formatResultTable(table)}`, 0, 1));
+          });
+          container.addChild(new Text(experiment.analysis, 0, 1));
+          results
+            .filter((researchResult) => researchResult.experiment === experiment.title)
+            .forEach(appendResult);
+        });
+
+        const experimentTitles = new Set(experiments.map((experiment) => experiment.title));
+        const unassignedResults = results.filter(
+          (researchResult) => !researchResult.experiment || !experimentTitles.has(researchResult.experiment),
+        );
+        if (unassignedResults.length > 0) {
+          container.addChild(new Text(theme.fg("accent", theme.bold("Additional Evidence")), 0, 1));
+          unassignedResults.forEach(appendResult);
+        }
+
+        container.addChild(new Text(theme.fg("accent", theme.bold("Overall Analysis")), 0, 1));
+        container.addChild(
+          new Text(
+            [details.overallAnalysis ?? "", details.conclusion ? `\n> ${details.conclusion}` : undefined]
+              .filter((line): line is string => Boolean(line))
+              .join("\n"),
+            0,
+            0,
+          ),
+        );
+        container.addChild(new Text(theme.fg("warning", theme.bold("Uncertainty")), 0, 1));
+        container.addChild(new Text(details.uncertainty, 0, 0));
+        container.addChild(new Text(theme.fg("accent", theme.bold("Next")), 0, 1));
+        container.addChild(new Text(details.next, 0, 0));
+
+        if (results.length > 0) {
+          const links = results.map((researchResult) =>
+            `- ${terminalLink(researchResult.url, researchResult.artifact.path)}`,
+          );
+          container.addChild(
+            new Text(`${theme.fg("accent", theme.bold("Relevant Artifacts"))}\n${links.join("\n")}`, 0, 1),
+          );
+        }
+        return container;
+      }
+
       const sections = [
         theme.fg("accent", theme.bold("Hypothesis")),
         details.hypothesis,
@@ -334,10 +440,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
       sections.push(
         "",
         theme.fg("success", theme.bold("Main Result")),
-        details.observation,
+        details.observation ?? "",
       );
       if ((details.metrics ?? []).length > 0) {
-        sections.push("", theme.fg("success", theme.bold("Headline Metrics")), formatMetricTable(details.metrics));
+        sections.push("", theme.fg("success", theme.bold("Headline Metrics")), formatMetricTable(details.metrics ?? []));
       }
       if (details.analysis) {
         sections.push("", theme.fg("accent", theme.bold("Analysis")), details.analysis);
@@ -355,30 +461,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
       const results = details.results ?? [];
       if (results.length > 0) {
         container.addChild(new Text(theme.fg("accent", theme.bold("Curated Results")), 0, 1));
-        results.forEach((researchResult, index) => {
-          const artifact = researchResult.artifact;
-          const label = `${index + 1}. ${researchResult.title}`;
-          const semantics = [
-            `${theme.fg("muted", researchResult.role.toUpperCase())} | ${researchResult.description}`,
-            researchResult.takeaway ? `${theme.fg("success", "Takeaway")} ${researchResult.takeaway}` : undefined,
-            terminalLink(researchResult.url, `${artifact.name} (${formatSize(artifact.size)})`),
-            theme.fg("muted", researchResult.absolutePath),
-          ].filter((line): line is string => Boolean(line));
-          container.addChild(new Text(`${theme.bold(label)}\n${semantics.join("\n")}`, 0, 0));
-
-          const image = checkpointImages.get(checkpointImageKey(artifact)) ?? radar?.getCachedImage(artifact);
-          if (image) {
-            container.addChild(
-              new Image(image.data, image.mimeType, { fallbackColor: (value) => theme.fg("muted", value) }, {
-                maxWidthCells: 72,
-                maxHeightCells: 24,
-                filename: artifact.name,
-              }),
-            );
-          } else if (researchResult.preview) {
-            container.addChild(new Text(researchResult.preview, 0, 1));
-          }
-        });
+        results.forEach(appendResult);
       }
       return container;
     },
@@ -655,6 +738,101 @@ function sanitizeExperiment(experiment: ExperimentDetails, hypothesis: string): 
   };
 }
 
+function sanitizeCheckpointExperiment(
+  experiment: CheckpointExperiment,
+  hypothesis: string,
+): CheckpointExperiment {
+  const sanitized = sanitizeExperiment(experiment, hypothesis);
+  return {
+    ...experiment,
+    setup: sanitized.setup,
+    parameters: sanitized.parameters,
+  };
+}
+
+function formatCheckpointReport(details: CheckpointDetails): string {
+  const sections = [
+    `# Checkpoint: ${details.title ?? "Research Update"}`,
+    `## Research Question\n\n${details.researchQuestion ?? ""}\n\nWorking hypothesis: ${details.hypothesis}`,
+  ];
+  const experiments = details.experiments ?? [];
+  if (experiments.length > 0) {
+    const experimentReports = experiments.map((experiment, index) => {
+      const parts = [
+        `### Experiment ${index + 1} - ${experiment.title}`,
+        experiment.rationale,
+        experiment.design,
+      ];
+      const experimentDetails = formatExperimentDetails(experiment);
+      if (experimentDetails) parts.push(`Experimental Details\n\n${experimentDetails}`);
+      parts.push(experiment.observation);
+      experiment.tables.forEach((table) => {
+        parts.push(table.title ? `${table.title}\n\n${formatResultTable(table)}` : formatResultTable(table));
+      });
+      parts.push(experiment.analysis);
+      const relatedResults = details.results.filter((result) => result.experiment === experiment.title);
+      relatedResults.forEach((result) => {
+        if ([".png", ".jpg", ".jpeg"].includes(result.artifact.extension)) {
+          parts.push(`![${result.title}](${result.artifact.path})`);
+        } else {
+          parts.push(`Related artifact: ${result.artifact.path}`);
+        }
+      });
+      return parts.join("\n\n");
+    });
+    sections.push(`## Condition & Result\n\n${experimentReports.join("\n\n")}`);
+  }
+
+  const conclusion = details.conclusion
+    ? `\n\n${details.conclusion.split("\n").map((line) => `> ${line}`).join("\n")}`
+    : "";
+  sections.push(`## Overall Analysis\n\n${details.overallAnalysis ?? ""}${conclusion}`);
+  sections.push(`## Uncertainty\n\n${details.uncertainty}`);
+  sections.push(`## Next\n\n${details.next}`);
+  if (details.results.length > 0) {
+    sections.push(`## Relevant Artifacts\n\n${details.results.map((result) => `- ${result.artifact.path}`).join("\n")}`);
+  }
+  return sections.join("\n\n");
+}
+
+function formatExperimentDetails(experiment: CheckpointExperiment): string | undefined {
+  const rows = [
+    ...experiment.setup.map((detail) => ["Setup", detail.name, detail.value, detail.description ?? ""]),
+    ...experiment.variables.map((variable) => [
+      variable.role,
+      variable.name,
+      variable.value ?? "",
+      variable.description,
+    ]),
+    ...experiment.parameters.map((parameter) => [
+      "Hyperparameter",
+      parameter.name,
+      parameter.value,
+      parameter.rationale ?? "",
+    ]),
+  ];
+  if (rows.length === 0) return undefined;
+  return formatTable(["Type", "Name", "Value / Levels", "Why it matters"], rows);
+}
+
+function formatResultTable(table: ExperimentResultTable): string {
+  return formatTable(
+    table.columns,
+    table.rows.map((row) => table.columns.map((_, index) => formatResultCell(row[index]))),
+  );
+}
+
+function formatResultCell(cell: ResultTableCell | undefined): string {
+  if (!cell) return "";
+  if (cell.value !== undefined) {
+    return withUnit(
+      formatSignificant(cell.value, cell.significantDigits ?? 4, cell.significantDigits !== undefined),
+      cell.unit,
+    );
+  }
+  return cell.text ?? "";
+}
+
 function formatSetupTable(setup: ExperimentSetupDetail[]): string {
   if (setup.length === 0) return "(not recorded)";
   return formatTable(
@@ -682,13 +860,19 @@ function formatMetricTable(metrics: CheckpointMetric[]): string {
     ["Metric", "Value", "Baseline", "Change", "Note"],
     metrics.map((metric) => {
       const digits = metric.significantDigits ?? 4;
+      const preservePrecision = metric.significantDigits !== undefined;
       return [
         metric.name,
-        withUnit(formatSignificant(metric.value, digits), metric.unit),
-        metric.baseline === undefined ? "" : withUnit(formatSignificant(metric.baseline, digits), metric.unit),
+        withUnit(formatSignificant(metric.value, digits, preservePrecision), metric.unit),
+        metric.baseline === undefined
+          ? ""
+          : withUnit(formatSignificant(metric.baseline, digits, preservePrecision), metric.unit),
         metric.change === undefined
           ? ""
-          : withUnit(formatSignificant(metric.change, digits), metric.changeUnit ?? metric.unit),
+          : withUnit(
+              formatSignificant(metric.change, digits, preservePrecision),
+              metric.changeUnit ?? metric.unit,
+            ),
         metric.note ?? "",
       ];
     }),

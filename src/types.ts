@@ -31,6 +31,7 @@ export interface CheckpointResult {
   description: string;
   takeaway?: string;
   columns?: string[];
+  experiment?: string;
   preview?: string;
 }
 
@@ -74,14 +75,41 @@ export interface CheckpointMetric {
   note?: string;
 }
 
-export interface CheckpointDetails {
-  hypothesis: string;
-  experiment?: ExperimentDetails;
+export interface ResultTableCell {
+  text?: string;
+  value?: number;
+  unit?: string;
+  significantDigits?: number;
+}
+
+export interface ExperimentResultTable {
+  title?: string;
+  columns: string[];
+  rows: ResultTableCell[][];
+}
+
+export interface CheckpointExperiment extends ExperimentDetails {
+  title: string;
   observation: string;
-  metrics: CheckpointMetric[];
+  tables: ExperimentResultTable[];
   analysis: string;
+}
+
+export interface CheckpointDetails {
+  title?: string;
+  researchQuestion?: string;
+  hypothesis: string;
+  experiments?: CheckpointExperiment[];
+  overallAnalysis?: string;
+  conclusion?: string;
   uncertainty: string;
   next: string;
   actionCount: number;
   results: CheckpointResult[];
+
+  // Retained so checkpoint messages created by older package versions still render.
+  experiment?: ExperimentDetails;
+  observation?: string;
+  metrics?: CheckpointMetric[];
+  analysis?: string;
 }
