@@ -44,7 +44,9 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
 
 `research_checkpoint` 是 terminating tool。它输出一份研究报告，而不是固定字段摘要：Checkpoint Title、Research Question、Condition & Result、Overall Analysis、Uncertainty、Next 和 Relevant Artifacts。
 
-`experiments` 按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
+启用 Research Mode 不等于每项任务都需要 checkpoint。Agent 必须先判断当前用户请求是否让它实际开展了科研实验；只有至少一个实验已经运行后，Agent 才根据 evidence、decision branch、uncertainty、stagnation 和下一实验成本自主判断是否 checkpoint。普通对话、问题回答、规划、代码维护、文档修改和用于验证软件改动的测试都不具备 checkpoint 资格。尚未运行实验时若需要成本批准，应使用普通回复询问用户。
+
+`experiments` 是必填字段，按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
 
 ```json
 {

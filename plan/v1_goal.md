@@ -207,7 +207,7 @@ Setup、variables 和 experiment hyperparameters 只在理解 evidence 所必需
 
 每个实验可以提供多张结构化结果表。数值 cell 应按测量精度保留适当有效位数；CSV/Parquet supporting results 在终端中直接显示有界 preview，图片应内联到其关联的实验下。所有 curated artifacts 在报告末尾统一列出。
 
-非实验型 Decision 或 Stagnation checkpoint 可以省略 `Condition & Result`，但仍应给出 Research Question、Overall Analysis、Uncertainty 和 Next。
+Checkpoint 必须包含至少一个实际运行的实验。非实验型讨论、规划、代码维护、文档工作和软件验证不应创建 checkpoint；需要用户批准尚未运行的高成本实验时，应通过普通回复交还选择，而不是构造空实验 checkpoint。
 
 Checkpoint 不只是输出一段文本。
 
@@ -223,15 +223,17 @@ Checkpoint 不只是输出一段文本。
 
 V1 不应该简单地按照固定次数机械 checkpoint。
 
-至少需要考虑三种触发条件。
+Agent 首先根据用户意图判断当前对话是否要求开展科研实验，并确认至少一个实验已经实际开始运行。只有满足这个资格条件后，才评估 checkpoint trigger。普通对话、问题回答、规划、实现工作以及仅用于验证软件改动的测试不属于科研实验；tool action 数量本身也不能产生 checkpoint 资格。
 
-第一种是 Evidence Trigger。当一个新的结果明显改变了当前假设，例如实验产生了一张关键图、一个显著统计结果或者一个出乎预期的观察时，Agent 应优先 checkpoint，而不是自动扩展实验。
+实验开始后至少需要考虑三种触发条件。
 
-第二种是 Decision Trigger。当下一步存在两个或多个明显不同的研究方向，或者下一步操作成本明显升高时，应优先把选择交给用户。
+第一种是 Evidence Trigger。当一个新的实验结果明显改变了当前假设，例如产生了一张关键图、一个显著统计结果或者一个出乎预期的观察时，Agent 应自主判断是否 checkpoint，而不是自动扩展实验。
 
-第三种是 Stagnation Trigger。当连续探索没有明显降低不确定性，或者当前实验无法区分多个解释时，Agent 应总结当前障碍并 checkpoint。
+第二种是 Decision Trigger。当后续实验存在两个或多个明显不同的研究方向，或者下一项实验成本明显升高时，应优先把选择交给用户。
 
-Tool action 每增加六次时，插件只提醒 Agent 重新评估这些条件，不强制 checkpoint。
+第三种是 Stagnation Trigger。当连续实验没有明显降低不确定性，或者当前实验无法区分多个解释时，Agent 应总结当前障碍并 checkpoint。
+
+Tool action 每增加六次时，插件只提醒 Agent：若当前用户请求已经启动科研实验，则重新评估这些条件；否则忽略 checkpoint 语义并继续普通任务。
 
 V1 不需要真正计算复杂的 intervention value。通过 prompt 规则、action counter 和 Soft Review 实现这一行为即可。
 

@@ -164,17 +164,16 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "End the current research interval with a report-style checkpoint. Cover all key experiments completed since the previous checkpoint or user calibration, each with its own condition, structured result tables, analysis, and linked artifacts. Then synthesize overall analysis, uncertainty, and next actions. Exclude Slurm and infrastructure settings unless systems behavior is under study. Call this alone as the final tool action.",
+      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. Never checkpoint ordinary conversation, planning, code maintenance, or software validation. Report all key experiments completed in that research interval, then synthesize analysis, uncertainty, and next actions. Call this alone as the final tool action.",
     promptSnippet: "End a research interval with a multi-experiment report and return control",
     promptGuidelines: [
-      "Write a report-style checkpoint with Research Question, Condition & Result, Overall Analysis, Uncertainty, Next, and Relevant Artifacts. Include every key experiment completed since the previous checkpoint, in execution order. Use structured tables for quantitative comparisons and associate artifacts with the experiment they support. Do not report Slurm or infrastructure parameters unless the research question studies systems behavior.",
+      "First decide whether the user asked you to conduct empirical research and whether at least one experiment was actually run. Only then may you autonomously decide to checkpoint based on evidence, uncertainty, branching, or cost. Do not checkpoint discussion, planning, implementation work, or tests that merely validate software changes. When eligible, write a report with Research Question, Condition & Result, Overall Analysis, Uncertainty, Next, and Relevant Artifacts.",
     ],
     parameters: Type.Object({
       title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
       researchQuestion: Type.String({ description: "Research question and the distinction this interval is trying to resolve" }),
       hypothesis: Type.String({ description: "Current working hypothesis after considering this interval's evidence" }),
-      experiments: Type.Optional(
-        Type.Array(
+      experiments: Type.Array(
           Type.Object({
             title: Type.String({ description: "Short experiment name, without numbering" }),
             rationale: Type.String({ description: "Why this experiment was needed in the research sequence" }),
@@ -239,8 +238,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
             ),
             analysis: Type.String({ description: "Interpretation, causal limits, and what this experiment adds" }),
           }),
-          { minItems: 1, maxItems: 6, description: "Key experiments completed in this interval, in execution order" },
-        ),
+        { minItems: 1, maxItems: 6, description: "Key empirical experiments actually completed in this interval, in execution order" },
       ),
       overallAnalysis: Type.String({ description: "Synthesis across experiments and how the evidence updates the hypothesis" }),
       conclusion: Type.Optional(Type.String({ description: "Strongest conclusion currently justified, stated in one compact passage" })),
@@ -265,7 +263,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const results = await prepareCheckpointResults(params.results, ctx);
-      const experiments = (params.experiments ?? []).map((experiment) =>
+      const experiments = params.experiments.map((experiment) =>
         sanitizeCheckpointExperiment(
           {
             ...experiment,
