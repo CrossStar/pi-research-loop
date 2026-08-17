@@ -2,6 +2,7 @@ import { createReadStream, type FSWatcher, watch } from "node:fs";
 import { open, opendir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
+import { formatTable } from "./table.js";
 import type { ArtifactRecord } from "./types.js";
 
 const SUPPORTED_EXTENSIONS = new Set([
@@ -386,9 +387,11 @@ async function previewCsv(path: string, selectedColumns?: string[]): Promise<str
   const indexes = (requestedIndexes.length > 0 ? requestedIndexes : header.map((_, index) => index)).slice(0, 6);
   const rows = Math.max(0, lineCount - (lineCount > 0 ? 1 : 0));
   const rowLabel = capped ? `>=${rows}` : String(rows);
-  const table = parsed
-    .map((fields) => indexes.map((index) => formatCell(fields[index] ?? "")).join(" | "))
-    .join("\n");
+  const table = formatTable(
+    indexes.map((index) => header[index] ?? ""),
+    parsed.slice(1).map((fields) => indexes.map((index) => fields[index] ?? "")),
+    16,
+  );
   const selection = requestedIndexes.length > 0
     ? `; selected columns: ${indexes.map((index) => header[index]).join(", ")}`
     : header.length > indexes.length ? `; showing first ${indexes.length} columns` : "";
@@ -435,11 +438,6 @@ function parseCsvLine(line: string): string[] {
   }
   fields.push(field);
   return fields;
-}
-
-function formatCell(value: string): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length <= 16 ? compact : `${compact.slice(0, 15)}...`;
 }
 
 function truncate(value: string, limit: number): string {

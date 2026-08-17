@@ -6,11 +6,15 @@ import { pathToFileURL } from "node:url";
 import { Type } from "typebox";
 import { ArtifactRadar, formatSize, loadArtifactPreview, resolveArtifactRecord } from "./artifacts.js";
 import { evaluateFastCommand, researchPolicy, type ResearchMode } from "./governor.js";
+import { formatSignificant, formatTable } from "./table.js";
 import type {
   ArtifactRecord,
   CheckpointDetails,
+  CheckpointMetric,
   CheckpointResult,
+  ExperimentDetails,
   ExperimentParameter,
+  ExperimentSetupDetail,
   ExperimentVariable,
   ResearchResultRole,
   ResearchState,
@@ -155,10 +159,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "End the current research round and return control to the user with a clear experiment rationale/design, key variables and parameters, main result, analysis, uncertainty, and next action. Omit experiment only for non-experimental decision or stagnation checkpoints. Attach only semantically relevant results. Call this alone as the final tool action.",
+      "End the current research round and return control to the user. The experiment is the key experiment completed since the previous checkpoint or user calibration. Report rationale/design, essential setup such as model/data/loss/optimizer/evaluation, key variables, experiment-only hyperparameters, structured metrics, analysis, uncertainty, and next action. Exclude Slurm and infrastructure settings unless they are the research subject. Call this alone as the final tool action.",
     promptSnippet: "End a research round with structured evidence and return control to the user",
     promptGuidelines: [
-      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. When an experiment was run, explain why it was needed, its design, key variables and parameters, then separate the main result from its analysis. Attach only results you can explain.",
+      "Call research_checkpoint alone as the final tool action after meaningful evidence, at a decision branch, when progress stalls, or before materially higher cost. Summarize the key experiment completed since the previous checkpoint: include essential setup, variables, experiment-only hyperparameters, structured metrics, and separate result from analysis. Do not report Slurm or infrastructure parameters unless the experiment studies systems behavior.",
     ],
     parameters: Type.Object({
       hypothesis: Type.String({ description: "The hypothesis currently being tested" }),
@@ -166,6 +170,14 @@ export default function researchLoop(pi: ExtensionAPI): void {
         Type.Object({
           rationale: Type.String({ description: "Why this experiment was necessary for the current hypothesis" }),
           design: Type.String({ description: "Concise experimental setup and comparison being made" }),
+          setup: Type.Array(
+            Type.Object({
+              name: Type.String({ description: "Essential setup component such as model, dataset, loss, optimizer, or evaluation protocol" }),
+              value: Type.String({ description: "Component choice or configuration" }),
+              description: Type.Optional(Type.String({ description: "Why this detail matters for understanding the experiment" })),
+            }),
+            { minItems: 1, maxItems: 12, description: "Essential experiment context, not infrastructure configuration" },
+          ),
           variables: Type.Array(
             Type.Object({
               name: Type.String({ description: "Variable name" }),
@@ -181,11 +193,32 @@ export default function researchLoop(pi: ExtensionAPI): void {
               value: Type.String({ description: "Parameter value used" }),
               rationale: Type.Optional(Type.String({ description: "Why this value matters" })),
             }),
-            { minItems: 1, maxItems: 12, description: "Key parameter settings, not a full configuration dump" },
+            {
+              minItems: 1,
+              maxItems: 12,
+              description: "Experiment hyperparameters only. Exclude Slurm, queue, GPU allocation, logging, and orchestration settings unless they are under study.",
+            },
           ),
         }),
       ),
       observation: Type.String({ description: "The main experimental result, stated separately from interpretation" }),
+      metrics: Type.Optional(
+        Type.Array(
+          Type.Object({
+            name: Type.String({ description: "Metric name" }),
+            value: Type.Number({ description: "Numeric metric value" }),
+            unit: Type.Optional(Type.String({ description: "Metric unit" })),
+            baseline: Type.Optional(Type.Number({ description: "Baseline or control value when directly comparable" })),
+            change: Type.Optional(Type.Number({ description: "Reported absolute or relative change; clarify in note" })),
+            changeUnit: Type.Optional(Type.String({ description: "Unit for change when different from the metric value" })),
+            significantDigits: Type.Optional(
+              Type.Integer({ minimum: 1, maximum: 8, description: "Significant digits justified by the measurement" }),
+            ),
+            note: Type.Optional(Type.String({ description: "Short comparison or interpretation aid, not the full analysis" })),
+          }),
+          { maxItems: 12, description: "Structured headline metrics shown as a terminal table" },
+        ),
+      ),
       analysis: Type.String({ description: "Interpretation of the result and whether it supports the hypothesis" }),
       uncertainty: Type.String({ description: "Limitations, confounders, and what remains unknown" }),
       next: Type.String({ description: "One concrete next action for user calibration" }),
@@ -217,8 +250,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
       const results = await prepareCheckpointResults(params.results, ctx);
       const details: CheckpointDetails = {
         hypothesis: params.hypothesis,
-        experiment: params.experiment,
+        experiment: params.experiment ? sanitizeExperiment(params.experiment, params.hypothesis) : undefined,
         observation: params.observation,
+        metrics: params.metrics ?? [],
         analysis: params.analysis,
         uncertainty: params.uncertainty,
         next: params.next,
@@ -238,8 +272,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
         ? [
             `Why This Experiment\n${details.experiment.rationale}`,
             `Experimental Design\n${details.experiment.design}`,
-            `Key Variables\n${details.experiment.variables.map(formatVariable).join("\n")}`,
-            `Key Parameters\n${details.experiment.parameters.map(formatParameter).join("\n")}`,
+            `Experimental Setup\n${formatSetupTable(details.experiment.setup ?? [])}`,
+            `Key Variables\n${formatVariableTable(details.experiment.variables)}`,
+            `Experiment Hyperparameters\n${formatParameterTable(details.experiment.parameters)}`,
           ].join("\n\n")
         : undefined;
       const checkpointText = [
@@ -247,6 +282,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
         `Hypothesis\n${details.hypothesis}`,
         experimentText,
         `Main Result\n${details.observation}`,
+        (details.metrics ?? []).length > 0 ? `Headline Metrics\n${formatMetricTable(details.metrics)}` : undefined,
         `Analysis\n${details.analysis}`,
         `Uncertainty\n${details.uncertainty}`,
         `Next\n${details.next}`,
@@ -284,11 +320,14 @@ export default function researchLoop(pi: ExtensionAPI): void {
           theme.fg("accent", theme.bold("Experimental Design")),
           details.experiment.design,
           "",
-          theme.fg("accent", theme.bold("Key Variables")),
-          ...details.experiment.variables.map((variable) => formatVariable(variable)),
+          theme.fg("accent", theme.bold("Experimental Setup")),
+          formatSetupTable(details.experiment.setup ?? []),
           "",
-          theme.fg("accent", theme.bold("Key Parameters")),
-          ...details.experiment.parameters.map((parameter) => formatParameter(parameter)),
+          theme.fg("accent", theme.bold("Key Variables")),
+          formatVariableTable(details.experiment.variables),
+          "",
+          theme.fg("accent", theme.bold("Experiment Hyperparameters")),
+          formatParameterTable(details.experiment.parameters),
         );
       }
 
@@ -297,6 +336,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
         theme.fg("success", theme.bold("Main Result")),
         details.observation,
       );
+      if ((details.metrics ?? []).length > 0) {
+        sections.push("", theme.fg("success", theme.bold("Headline Metrics")), formatMetricTable(details.metrics));
+      }
       if (details.analysis) {
         sections.push("", theme.fg("accent", theme.bold("Analysis")), details.analysis);
       }
@@ -589,25 +631,72 @@ async function previewParquet(
     columns: string[];
     rows: Array<Record<string, unknown>>;
   };
-  const header = data.columns.map(formatCheckpointCell).join(" | ");
-  const rows = data.rows
-    .map((row) => data.columns.map((column) => formatCheckpointCell(row[column])).join(" | "))
-    .join("\n");
+  const table = formatTable(
+    data.columns,
+    data.rows.map((row) => data.columns.map((column) => formatCheckpointCell(row[column]))),
+    16,
+  );
   const columnLabel = selectedColumns?.length
     ? `; selected columns: ${data.columns.join(", ")}`
     : data.columnCount > data.columns.length ? `; showing first ${data.columns.length} columns` : "";
   const shapeLabel = sampleShard ? "Sample shard shape" : "Shape";
-  return `${shapeLabel}: ${data.rowCount} rows x ${data.columnCount} columns${columnLabel}\n\n${header}${rows ? `\n${rows}` : ""}`;
+  return `${shapeLabel}: ${data.rowCount} rows x ${data.columnCount} columns${columnLabel}\n\n${table}`;
 }
 
-function formatVariable(variable: ExperimentVariable): string {
-  const value = variable.value ? ` = ${variable.value}` : "";
-  return `- ${variable.name} [${variable.role}]${value}: ${variable.description}`;
+const INFRASTRUCTURE_FIELD = /(?:^|[._-])(?:slurm|partition|qos|account|job[_-]?name|node(?:s)?|ntasks|cpus?[_-]?per[_-]?task|gres|walltime|time[_-]?limit)(?:$|[._-])/i;
+const SYSTEMS_RESEARCH = /\b(?:slurm|scheduler|scheduling|cluster throughput|cluster utilization|distributed scaling)\b|系统性能|集群吞吐|调度/i;
+
+function sanitizeExperiment(experiment: ExperimentDetails, hypothesis: string): ExperimentDetails {
+  if (SYSTEMS_RESEARCH.test(`${hypothesis}\n${experiment.rationale}\n${experiment.design}`)) return experiment;
+  return {
+    ...experiment,
+    setup: experiment.setup.filter((detail) => !INFRASTRUCTURE_FIELD.test(detail.name)),
+    parameters: experiment.parameters.filter((parameter) => !INFRASTRUCTURE_FIELD.test(parameter.name)),
+  };
 }
 
-function formatParameter(parameter: ExperimentParameter): string {
-  const rationale = parameter.rationale ? ` - ${parameter.rationale}` : "";
-  return `- ${parameter.name} = ${parameter.value}${rationale}`;
+function formatSetupTable(setup: ExperimentSetupDetail[]): string {
+  if (setup.length === 0) return "(not recorded)";
+  return formatTable(
+    ["Component", "Value", "Why it matters"],
+    setup.map((detail) => [detail.name, detail.value, detail.description ?? ""]),
+  );
+}
+
+function formatVariableTable(variables: ExperimentVariable[]): string {
+  return formatTable(
+    ["Variable", "Role", "Value / Levels", "Meaning"],
+    variables.map((variable) => [variable.name, variable.role, variable.value ?? "", variable.description]),
+  );
+}
+
+function formatParameterTable(parameters: ExperimentParameter[]): string {
+  return formatTable(
+    ["Hyperparameter", "Value", "Why it matters"],
+    parameters.map((parameter) => [parameter.name, parameter.value, parameter.rationale ?? ""]),
+  );
+}
+
+function formatMetricTable(metrics: CheckpointMetric[]): string {
+  return formatTable(
+    ["Metric", "Value", "Baseline", "Change", "Note"],
+    metrics.map((metric) => {
+      const digits = metric.significantDigits ?? 4;
+      return [
+        metric.name,
+        withUnit(formatSignificant(metric.value, digits), metric.unit),
+        metric.baseline === undefined ? "" : withUnit(formatSignificant(metric.baseline, digits), metric.unit),
+        metric.change === undefined
+          ? ""
+          : withUnit(formatSignificant(metric.change, digits), metric.changeUnit ?? metric.unit),
+        metric.note ?? "",
+      ];
+    }),
+  );
+}
+
+function withUnit(value: string, unit: string | undefined): string {
+  return unit ? `${value} ${unit}` : value;
 }
 
 function formatCheckpointCell(value: unknown): string {

@@ -43,6 +43,12 @@ export interface ExperimentVariable {
   value?: string;
 }
 
+export interface ExperimentSetupDetail {
+  name: string;
+  value: string;
+  description?: string;
+}
+
 export interface ExperimentParameter {
   name: string;
   value: string;
@@ -52,14 +58,27 @@ export interface ExperimentParameter {
 export interface ExperimentDetails {
   rationale: string;
   design: string;
+  setup: ExperimentSetupDetail[];
   variables: ExperimentVariable[];
   parameters: ExperimentParameter[];
+}
+
+export interface CheckpointMetric {
+  name: string;
+  value: number;
+  unit?: string;
+  baseline?: number;
+  change?: number;
+  changeUnit?: string;
+  significantDigits?: number;
+  note?: string;
 }
 
 export interface CheckpointDetails {
   hypothesis: string;
   experiment?: ExperimentDetails;
   observation: string;
+  metrics: CheckpointMetric[];
   analysis: string;
   uncertainty: string;
   next: string;

@@ -42,7 +42,7 @@ RESEARCH OFF
 
 Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/reproducibility bookkeeping 和明显的长任务入口，同时要求 Agent 优先做最小实验。
 
-`research_checkpoint` 是 terminating tool。实验型 checkpoint 按以下顺序展示：Hypothesis、Why This Experiment、Experimental Design、Key Variables、Key Parameters、Main Result、Analysis、Uncertainty 和 Next。非实验型 decision/stagnation checkpoint 可以省略 `experiment`。
+`research_checkpoint` 是 terminating tool。`experiment` 只描述从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的关键实验，不回顾更早实验，也不描述尚未运行的下一步实验。实验型 checkpoint 按以下顺序展示：Hypothesis、Why This Experiment、Experimental Design、Experimental Setup、Key Variables、Experiment Hyperparameters、Main Result、Headline Metrics、Analysis、Uncertainty 和 Next。非实验型 decision/stagnation checkpoint 可以省略 `experiment`。
 
 ```json
 {
@@ -50,6 +50,18 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
   "experiment": {
     "rationale": "检验 evaluator 是否奖励表面安全措辞",
     "design": "对相同回答进行有无安全声明的配对比较",
+    "setup": [
+      {
+        "name": "Evaluator",
+        "value": "safety-rm-v2",
+        "description": "被测试的安全评分模型"
+      },
+      {
+        "name": "Evaluation protocol",
+        "value": "paired scoring",
+        "description": "对同一回答主体进行配对比较"
+      }
+    ],
     "variables": [
       {
         "name": "disclaimer",
@@ -71,14 +83,23 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
       }
     ]
   },
-  "observation": "平均配对评分提高 0.08",
+  "observation": "添加安全声明后，多数样本的评分上升",
+  "metrics": [
+    {
+      "name": "mean_score_delta",
+      "value": 0.081734,
+      "baseline": 0,
+      "significantDigits": 3,
+      "note": "paired mean"
+    }
+  ],
   "analysis": "结果支持 evaluator 对表面安全措辞敏感，但尚未排除长度效应",
   "uncertainty": "尚未运行等长度中性前缀对照",
   "next": "运行中性前缀对照实验"
 }
 ```
 
-`variables` 的 role 支持 `independent`、`dependent`、`control` 和 `derived`。只记录影响实验解释的关键变量与参数，不倾倒完整运行配置。
+`setup` 用于 Model、Dataset、Loss、Optimizer、Evaluation protocol 等理解实验所需的关键细节。`variables` 的 role 支持 `independent`、`dependent`、`control` 和 `derived`。`parameters` 只记录实验超参；Slurm partition、QoS、节点数、walltime、日志和调度参数不会展示，除非研究问题本身就是系统性能或调度行为。`metrics` 以终端表格展示，并按 `significantDigits` 控制有效位数。
 
 Checkpoint 不会自动附加刚生成的文件。Agent 只能通过结构化 `results` 提交自己能够解释的 supporting results：
 

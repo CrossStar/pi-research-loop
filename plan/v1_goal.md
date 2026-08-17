@@ -154,7 +154,9 @@ Research Checkpoint 是人类重新获得控制权的主要机制。
 
 插件必须注册一个 `research_checkpoint` tool，使 Agent 能够明确表示当前一个研究片段已经结束。
 
-Checkpoint 至少应该包含当前假设、实验动机与设计、关键变量和参数、主要结果、对结果的分析、仍然存在的不确定性以及建议的下一步行动。
+Checkpoint 至少应该包含当前假设、实验动机与设计、理解实验所需的关键 setup、关键变量、实验超参、结构化结果、对结果的分析、仍然存在的不确定性以及建议的下一步行动。
+
+这里的实验只指从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的关键实验，不应重复更早的实验，也不应把尚未运行的下一步实验写成当前实验。
 
 实验型 checkpoint 应明确区分“实验观察到了什么”和“如何解释这个观察”，避免把事实、推断和限制混在同一段文本中。
 
@@ -170,17 +172,30 @@ Why This Experiment
 Experimental Design
 对同一回答构造原始版本和增加中性冗余文本的版本，并比较配对 reward 差值。
 
+Experimental Setup
+Component            | Value          | Why it matters
+---------------------+----------------+------------------------
+Evaluator            | safety-rm-v2   | 被测试的评分模型
+Evaluation protocol  | paired scoring | 固定回答主体进行配对比较
+
 Key Variables
 - response_variant [independent] = original vs extended
 - reward_delta [dependent]
 - semantic_content [control] = fixed
 
-Key Parameters
-- sample_size = 30
-- temperature = 0
+Experiment Hyperparameters
+Hyperparameter  | Value | Why it matters
+----------------+-------+------------------------
+sample_size     | 30    | 第一轮小规模 probe
+temperature     | 0     | 降低随机性
 
 Main Result
-增加中性文本后平均 reward 提高 0.08。
+增加中性文本后 reward 整体上升。
+
+Headline Metrics
+Metric             | Value  | Baseline | Change | Note
+-------------------+--------+----------+--------+------------
+mean_reward_delta  | 0.0817 | 0        | 0.0817 | paired mean
 
 Analysis
 结果支持 evaluator 对 response length 敏感，但尚不能排除格式变化造成的影响。
@@ -191,6 +206,10 @@ Uncertainty
 Next
 固定 response length 后重新比较 reward。
 ```
+
+Setup 应包括理解实验所需的 Model、Dataset、Loss、Optimizer、Evaluation protocol 等关键细节。Experiment Hyperparameters 只包括实验本身的参数；Slurm partition、QoS、节点数、walltime、日志和调度参数不应进入该表，除非研究问题本身就是系统性能或调度行为。
+
+数值 headline results 应以结构化 metrics 表格展示，并按测量精度保留适当有效位数。CSV/Parquet supporting results 也应在终端中直接显示有界表格 preview。
 
 非实验型 Decision 或 Stagnation checkpoint 可以省略实验结构，但仍应清楚区分 observation、analysis 和 uncertainty。
 
