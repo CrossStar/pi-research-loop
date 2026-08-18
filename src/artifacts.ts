@@ -1,9 +1,24 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createReadStream, type FSWatcher, watch } from "node:fs";
 import { open, opendir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { formatTable } from "./table.js";
-import type { ArtifactRecord } from "./types.js";
+
+export type ArtifactKind = "file" | "dataset";
+
+export interface ArtifactRecord {
+  kind: ArtifactKind;
+  path: string;
+  name: string;
+  extension: string;
+  size: number;
+  mtimeMs: number;
+  discoveredAt: number;
+  fileCount?: number;
+  fileCountCapped?: boolean;
+  samplePath?: string;
+}
 
 const SUPPORTED_EXTENSIONS = new Set([
   ".png",
@@ -48,14 +63,13 @@ export class ArtifactRadar {
   private pendingDatasetEmits = new Map<string, NodeJS.Timeout>();
   private pendingNewDatasets = new Set<string>();
   private datasetMembers = new Map<string, Map<string, { size: number; mtimeMs: number }>>();
-  private images = new Map<string, { data: string; mimeType: string }>();
 
   constructor(
     private readonly cwd: string,
     initialRecords: ArtifactRecord[],
     private readonly onArtifact: (record: ArtifactRecord, isNew: boolean) => void,
   ) {
-    this.records = initialRecords.map((record) => ({ ...record, kind: record.kind ?? "file" }));
+    this.records = [...initialRecords];
   }
 
   start(): void {
@@ -91,10 +105,6 @@ export class ArtifactRadar {
 
   getArtifacts(): ArtifactRecord[] {
     return [...this.records].sort((a, b) => a.discoveredAt - b.discoveredAt);
-  }
-
-  getCachedImage(record: ArtifactRecord): { data: string; mimeType: string } | undefined {
-    return this.images.get(cacheKey(record));
   }
 
   private queue(relativePath: string): void {
@@ -138,21 +148,8 @@ export class ArtifactRadar {
       discoveredAt: Date.now(),
     };
 
-    const mimeType = IMAGE_MIME[extension];
-    if (mimeType && fileStat.size <= 12 * 1024 * 1024) {
-      try {
-        this.images.set(cacheKey(record), {
-          data: (await readFile(absolutePath)).toString("base64"),
-          mimeType,
-        });
-      } catch {
-        // The file link remains useful when a preview cannot be loaded.
-      }
-    }
-
     if (this.stopped) return;
     if (previous) {
-      this.images.delete(cacheKey(previous));
       this.records[this.records.indexOf(previous)] = record;
     } else {
       this.records.push(record);
@@ -229,6 +226,7 @@ export async function resolveArtifactRecord(cwd: string, inputPath: string): Pro
 }
 
 export async function loadArtifactPreview(
+  pi: ExtensionAPI,
   cwd: string,
   record: ArtifactRecord,
   selectedColumns?: string[],
@@ -264,9 +262,15 @@ export async function loadArtifactPreview(
   }
 
   if (record.extension === ".parquet") {
+    const parquet = await previewParquet(
+      pi,
+      absolutePath,
+      selectedColumns,
+      record.kind === "dataset",
+    );
     return {
       title: record.name,
-      text: `${metadata}\n\nParquet preview requires a local pyarrow installation.`,
+      text: `${metadata}\n\n${parquet ?? "Parquet preview requires a local pyarrow installation."}`,
     };
   }
 
@@ -357,10 +361,6 @@ function datasetMetadata(record: ArtifactRecord): string {
   return `${record.path}\nDataset | ${count} ${record.extension.slice(1).toUpperCase()} files | ${formatSize(record.size)} sampled`;
 }
 
-function cacheKey(record: ArtifactRecord): string {
-  return `${record.path}:${record.mtimeMs}:${record.size}`;
-}
-
 async function previewCsv(path: string, selectedColumns?: string[]): Promise<string> {
   const input = createReadStream(path);
   const lines = createInterface({ input, crlfDelay: Infinity });
@@ -438,6 +438,60 @@ function parseCsvLine(line: string): string[] {
   }
   fields.push(field);
   return fields;
+}
+
+const PARQUET_PREVIEW_SCRIPT = `import json, sys
+import pyarrow.parquet as pq
+parquet = pq.ParquetFile(sys.argv[1])
+all_columns = parquet.schema_arrow.names
+requested = json.loads(sys.argv[2])
+columns = [column for column in requested if column in all_columns][:6] or all_columns[:6]
+rows = []
+if parquet.num_row_groups:
+    rows = parquet.read_row_group(0, columns=columns).slice(0, 5).to_pylist()
+print(json.dumps({
+    "rowCount": parquet.metadata.num_rows,
+    "columnCount": len(all_columns),
+    "columns": columns,
+    "rows": rows,
+}, default=str))`;
+
+async function previewParquet(
+  pi: ExtensionAPI,
+  absolutePath: string,
+  selectedColumns?: string[],
+  sampleShard = false,
+): Promise<string | undefined> {
+  const python = process.platform === "win32" ? "python" : "python3";
+  const result = await pi.exec(
+    python,
+    ["-c", PARQUET_PREVIEW_SCRIPT, absolutePath, JSON.stringify(selectedColumns ?? [])],
+    { timeout: 5000 },
+  );
+  if (result.code !== 0) return undefined;
+
+  const data = JSON.parse(result.stdout) as {
+    rowCount: number;
+    columnCount: number;
+    columns: string[];
+    rows: Array<Record<string, unknown>>;
+  };
+  const table = formatTable(
+    data.columns,
+    data.rows.map((row) => data.columns.map((column) => formatPreviewCell(row[column]))),
+    16,
+  );
+  const columnLabel = selectedColumns?.length
+    ? `; selected columns: ${data.columns.join(", ")}`
+    : data.columnCount > data.columns.length ? `; showing first ${data.columns.length} columns` : "";
+  const shapeLabel = sampleShard ? "Sample shard shape" : "Shape";
+  return `${shapeLabel}: ${data.rowCount} rows x ${data.columnCount} columns${columnLabel}\n\n${table}`;
+}
+
+function formatPreviewCell(value: unknown): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value) ?? String(value);
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length <= 16 ? compact : `${compact.slice(0, 15)}...`;
 }
 
 function truncate(value: string, limit: number): string {
