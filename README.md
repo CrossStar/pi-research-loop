@@ -1,85 +1,118 @@
-# pi-research-loop
+# Pi Research Loop
 
-面向科研 Agent 的 Pi Research Control Extension。它不替 Agent 做研究决策，而是为不同研究活动提供明确的工作契约：交流、头脑风暴、理解实验代码和执行实验分别采用不同 Work Mode；实验产生 evidence 后，通过 checkpoint 把控制权交还给用户。
+Pi Research Loop 是一个面向科研 Agent 的 Pi 扩展。它不替 Agent 做研究决策，
+而是为交流、头脑风暴、实验代码理解和实验执行提供明确的工作契约，并在实验产生
+evidence 后通过 checkpoint 将控制权交还给用户。
 
-## 核心观点
+## 核心特性
 
-1. **Research Loop 只有开启和关闭。** 用户通过 `/research on|off` 控制插件，不再区分 Fast 或 Normal profile。
-2. **Work Mode 由 Agent 自主选择。** Agent 根据当前不确定性的类型，在 Normal、Brainstorming、Exploration 和 Experiment 之间切换；用户指令始终拥有更高优先级。
-3. **模式代表行为契约，不是流程装饰。** 只有当主要工作方式发生变化时才切换，不因一次文件读取或一条命令频繁切换。
-4. **Checkpoint 由研究语义触发。** Action counter 只提供可见性和 Soft Review；没有固定上限，也不会机械中断实验。
-5. **Fast execution 不再是独立模式。** Time-to-insight、避免无关工程化和最小有效验证成为 Research Loop 的基础原则，但不能削弱科学主张。
-6. **复现实验采用 fidelity-first。** Agent 不得静默缩小数据、改变 split、替换 checkpoint、减少 seeds 或修改其他 reference invariants。
-7. **Diagnostic 不能冒充 reproduction。** Wiring 或小样本 smoke test 是独立 diagnostic；protocol deviation 必须披露并获得执行前批准。
-8. **Artifact discovery 与 evidence curation 分离。** Radar 可以发现输出，但 checkpoint 只展示 Agent 能解释且与结论相关的结果。
+- **简单开关**：使用 `/research on|off` 启用或停用 Research Loop，不区分 Fast 或 Normal profile。
+- **自主模式选择**：Agent 根据当前不确定性的类型，在 Normal、Brainstorming、
+  Exploration 和 Experiment 四种 Work Mode 之间切换；用户指令始终具有更高优先级。
+- **语义化 checkpoint**：checkpoint 由 evidence、decision、cost、uncertainty 和
+  stagnation 等研究语义触发，不由固定 action 上限机械触发。
+- **复现保真**：复现实验遵循 fidelity-first 原则，不静默修改数据范围、split、
+  checkpoint、seed 或其他 reference invariant。
+- **诊断与复现分离**：wiring test 和小样本 smoke test 属于 diagnostic，不能作为 reproduction 结果。
+- **结果策展**：Artifact Radar 负责发现输出；checkpoint 只呈现 Agent 能够解释且与结论相关的结果。
 
-## 开关
+## 安装
+
+### 从 GitHub 安装
+
+```bash
+pi install git:github.com/CrossStar/pi-research-loop
+```
+
+### 本地运行
+
+```bash
+npm install
+pi -ne -e .
+```
+
+## 快速开始
+
+Research Loop 默认关闭。进入 Pi 后，使用以下命令控制扩展：
 
 ```text
 /research on
 /research off
 ```
 
-默认是 `off`。
+启用后，扩展会：
 
-`/research on`：
+- 注入 Research Policy 并启用 Work Mode 状态机；
+- 启用 Artifact Radar；
+- 激活 mode transition、experiment lifecycle 和 checkpoint tools；
+- 将初始 Work Mode 设置为 Normal。
 
-- 启用 Research Policy 和 Work Mode 状态机
-- 启用 Artifact Radar
-- 激活 mode transition、experiment lifecycle 和 checkpoint tools
-- 初始进入 Normal Mode
+停用后，扩展会：
 
-`/research off`：
+- 停止注入 Research Policy，并停止 Artifact Radar capture；
+- 禁用 research tools；
+- 清除当前 Experiment Phase；
+- 恢复 Pi 的常规行为。
 
-- 停止 policy 注入和 Artifact Radar capture
-- 禁用 research tools
-- 清除活动的 Experiment Phase
-- 回到普通 Pi 行为
+可使用 `/artifacts` 查看当前研究会话中发现的 artifacts：
+
+```text
+/artifacts
+```
+
+## 设计原则
+
+1. **Research Loop 只有开启和关闭两种状态。** Fast execution 不再是独立模式；time-to-insight、避免无关工程化和最小有效验证是所有模式的基础原则，但不能削弱科学主张。
+2. **Work Mode 表示行为契约，而不是流程装饰。** 只有主要工作方式发生变化时才切换模式，不因单次文件读取或命令执行频繁切换。
+3. **Action counter 只提供可见性和 Soft Review。** 它没有固定上限，也不会自动中断实验或赋予 checkpoint 资格。
+4. **复现实验优先保证协议保真。** 任何可能影响科学结论的 protocol deviation 都必须披露，并在执行前获得批准。
+5. **Artifact discovery 与 evidence curation 相互分离。** 被发现的输出不一定会进入 checkpoint。
 
 ## Work Modes
 
-| Mode | 主要不确定性 | Agent 的行为 | 主要产物 |
-|---|---|---|---|
+| Mode | 主要不确定性 | Agent 行为 | 主要产物 |
+| --- | --- | --- | --- |
 | Normal | 目标明确 | 普通交流、实现、review 和维护 | 任务结果 |
-| Brainstorming | 不知道选择哪个方向 | 发散假设与方案，再收敛决策 | Decision Map |
-| Exploration | 不理解现有项目或实验代码 | 阅读、追踪和提取科学相关实现 | Experiment Blueprint |
-| Experiment | 需要通过实际运行获得 evidence | 声明协议、运行实验和分析结果 | Research Checkpoint |
+| Brainstorming | 不确定应选择哪个方向 | 发散假设与方案，再收敛决策 | Decision Map |
+| Exploration | 不理解现有项目或实验代码 | 阅读、追踪并提取与科学结论相关的实现 | Experiment Blueprint |
+| Experiment | 需要通过实际运行获得 evidence | 声明协议、运行实验并分析结果 | Research Checkpoint |
 
-Agent 使用以下判断选择主要模式：
-
-```text
-选择不确定性     -> BRAINSTORMING
-代码事实不确定性 -> EXPLORATION
-经验事实不确定性 -> EXPERIMENT
-其余任务         -> NORMAL
-```
-
-状态栏示例：
+Agent 根据主要不确定性选择模式：
 
 ```text
-RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
-RESEARCH ON | BRAINSTORMING | ACTIONS 4 | OUTPUTS 0
-RESEARCH ON | EXPLORATION | ACTIONS 8 | OUTPUTS 1
-RESEARCH ON | EXPERIMENT | ACTIONS 6 | CHECKPOINT REVIEW | OUTPUTS 3
-RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
-RESEARCH OFF
+选择不确定性      -> BRAINSTORMING
+代码事实不确定性  -> EXPLORATION
+经验事实不确定性  -> EXPERIMENT
+其他任务          -> NORMAL
 ```
 
-Mode transition 只更新工具状态和状态栏，不要求 Agent 在正文中反复宣布模式变化。
+Mode transition 只更新工具状态和状态栏，不要求 Agent 在正文中反复声明模式变化。
 
 ### Normal Mode
 
-默认工作方式。用于普通交流、目标明确的代码实现、Bug 修复、文档和 review。它没有固定输出格式，也不产生 checkpoint。
+Normal 是默认工作模式，适用于普通交流、目标明确的代码实现、bug 修复、文档编写和 review。该模式没有固定输出格式，也不会产生 checkpoint。
 
 ### Brainstorming Mode
 
-用于扩大并整理决策空间。Agent 应明确问题边界、候选方向、tradeoff、假设、未知项和推荐方向。默认不修改代码、不运行实验，退出时形成紧凑的 Decision Map。
+Brainstorming 用于扩大并整理决策空间。Agent 应明确以下内容：
+
+- 问题边界；
+- 候选方向及其 trade-off；
+- 关键假设和未知项；
+- 推荐方向。
+
+该模式默认不修改代码、不运行实验，退出时形成紧凑的 Decision Map。
 
 ### Exploration Mode
 
-用于理解项目，尤其是实验代码。Agent 应提取“最小充分实验描述”：足以让研究者写出忠实伪代码、列出科学变量和关键超参、解释数据到结果路径，并识别会改变实验结论的实现细节。
+Exploration 用于理解项目，尤其是实验代码。Agent 应提取“最小充分实验描述”，使研究者能够：
 
-`Experiment Blueprint` 应覆盖：
+- 写出忠实的伪代码；
+- 列出科学变量和关键超参数；
+- 解释数据到结果的完整路径；
+- 识别可能改变实验结论的实现细节。
+
+Experiment Blueprint 应覆盖：
 
 ```text
 Research Objective
@@ -97,7 +130,7 @@ Critical Implementation Details
 Source Conflicts and Unknowns
 ```
 
-信息筛选规则：
+信息筛选遵循以下规则：
 
 ```text
 它是否是写出伪代码所必需的？
@@ -105,50 +138,79 @@ Source Conflicts and Unknowns
 改变它是否可能改变科学结论？
 ```
 
-三个答案都是否，就忽略。Slurm、queue、日志框架、CLI boilerplate 和通用 utility 默认不进入 Blueprint，除非它们影响科学结果。
+如果三个问题的答案都是否，则忽略该信息。Slurm、queue、日志框架、CLI boilerplate
+和通用 utility 默认不进入 Blueprint，除非它们会影响科学结果。
 
-Exploration 可以执行静态 introspection、查看 resolved config 和检查数据结构；一旦开始运行能够产生科学 evidence 的任务，Agent 必须进入 Experiment Mode。
+Exploration 可以进行静态 introspection、查看 resolved config 和检查数据结构。
+一旦开始运行能够产生科学 evidence 的任务，Agent 必须进入 Experiment Mode。
 
 ### Experiment Mode
 
-进入时必须声明 Research Question、experiment intent、planned data scope 和 reference protocol。一个 Experiment Mode 可以包含多个围绕同一问题的实验。
+进入 Experiment Mode 时，Agent 必须声明：
 
-Experiment Mode 不能静默退出：
+- Research Question；
+- experiment intent；
+- planned data scope；
+- reference protocol。
+
+一个 Experiment Mode 可以包含多个围绕同一研究问题的实验，但不能静默退出：
 
 ```text
 EXPERIMENT -> research_checkpoint -> NORMAL
 ```
 
-如果尚未产生任何可解释 evidence，可以通过 abort 退出并说明原因。已经产生负结果、失败模式或 diagnostic evidence 时，不能用 abort 隐藏结果。
+如果没有产生任何可解释的 evidence，可以通过 `research_abort_experiment` 退出并说明
+原因。已经产生负结果、失败模式或 diagnostic evidence 时，不能使用 abort 隐藏结果，
+必须通过 `research_checkpoint` 汇报。
+
+## Checkpoint 与 Soft Review
+
+状态栏可能显示以下状态：
+
+```text
+RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
+RESEARCH ON | BRAINSTORMING | ACTIONS 4 | OUTPUTS 0
+RESEARCH ON | EXPLORATION | ACTIONS 8 | OUTPUTS 1
+RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3
+RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
+RESEARCH OFF
+```
+
+`SOFT REVIEW` 是非阻塞的语义复盘提示。它不会停止工具执行、自动调用 checkpoint，也不会使任务获得 checkpoint 资格。
+
+Action counter 不能替代 Agent 对 evidence、decision、cost、uncertainty 和 stagnation
+的判断。如果当前实验尚未完成，且没有满足语义触发条件，Agent 应继续执行实验。
 
 ## Reproduction Fidelity
 
 启动复现前，Agent 必须核对：
 
-- official paper，包括 appendix 和 supplementary material
-- 对应 commit/tag 的 official repository README
-- 相关 open/closed GitHub issues，优先关注 maintainer 澄清
+- official paper，包括 appendix 和 supplementary material；
+- 对应 commit 或 tag 的 official repository README；
+- 相关 open/closed GitHub issues，并优先关注 maintainer 的澄清。
 
-Paper、README、issue guidance 或实际代码行为冲突时，Agent 必须披露冲突及其科学影响，不能静默选择。
+当 paper、README、issue guidance 或实际代码行为之间存在冲突时，Agent 必须披露冲突及其科学影响，不能静默选择其中一个版本。
 
-每个 checkpoint experiment 记录：
+每个 checkpoint experiment 都应记录：
 
-- `protocol.intent`：`reproduction|diagnostic|exploratory|ablation`
-- `protocol.dataScope`：实际 dataset、split、sample count 和 sampling scope
-- `protocol.sources`：paper、README、issues 的状态、引用和 guidance
-- `protocol.deviations`：reference、actual、原因、限制和批准状态
+- `protocol.intent`：`reproduction`、`diagnostic`、`exploratory` 或 `ablation`；
+- `protocol.dataScope`：实际 dataset、split、sample count 和 sampling scope；
+- `protocol.sources`：paper、README 和 issues 的状态、引用及 guidance；
+- `protocol.deviations`：reference、actual、原因、限制和批准状态。
 
-Reproduction 缺少 source coverage 时显示 `MISSING`；未批准 deviation 时显示 `NO`。
+Reproduction 缺少 source coverage 时显示 `MISSING`；存在未批准的 deviation 时显示 `NO`。
 
 ## Artifact Radar
 
-```text
-/artifacts
-```
+Artifact Radar 支持以下格式：
 
-支持 PNG/JPG、SVG、CSV、JSON、HTML、PDF 和 Parquet。PNG/JPG 在终端内联；CSV/Parquet 只展示指定列或有限行。表格分片按父目录聚合为一个 Dataset Artifact。
+- 图片：PNG、JPG 和 SVG；
+- 表格与数据：CSV、JSON 和 Parquet；
+- 文档：HTML 和 PDF。
 
-Checkpoint 不会自动附加本轮所有输出。Curated result 角色支持：
+PNG 和 JPG 可以在终端内联预览；CSV 和 Parquet 只展示指定列或有限行。表格分片会按父目录聚合为一个 Dataset Artifact。
+
+Checkpoint 不会自动附加本轮产生的所有输出。Curated result 支持以下角色：
 
 ```text
 evidence
@@ -157,23 +219,12 @@ dataset
 intermediate
 ```
 
-## 安装与运行
+## 开发
 
-```bash
-npm install
-pi -ne -e .
-```
-
-安装 GitHub package：
-
-```bash
-pi install git:github.com/CrossStar/pi-research-loop
-```
-
-开发验证：
+运行 TypeScript 类型检查：
 
 ```bash
 npm run check
 ```
 
-仓库：https://github.com/CrossStar/pi-research-loop
+项目仓库：[github.com/CrossStar/pi-research-loop](https://github.com/CrossStar/pi-research-loop)
