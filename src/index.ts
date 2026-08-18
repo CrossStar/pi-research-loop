@@ -164,10 +164,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. Never checkpoint ordinary conversation, planning, code maintenance, or software validation. For every experiment, disclose scientific intent, actual data scope, reference protocol, and all deviations; a diagnostic must never be presented as reproduction evidence. Call this alone as the final tool action.",
+      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. For every reproduction, document consultation of the official paper, repository README, and relevant GitHub issues, including conflicts or search limitations. Also disclose scientific intent, actual data scope, and all protocol deviations. Call this alone as the final tool action.",
     promptSnippet: "End a research interval with a multi-experiment report and return control",
     promptGuidelines: [
-      "First decide whether the user asked you to conduct empirical research and whether at least one experiment was actually run. Only then may you autonomously decide to checkpoint. For each completed experiment, classify it as reproduction, diagnostic, exploratory, or ablation; state actual data scope and every reference-protocol deviation with prior user approval status. Never use a reduced diagnostic as evidence that an official reproduction succeeded.",
+      "For reproduction work, consult and reconcile three sources before execution: the official paper (including appendix/supplement), the official repository README at the relevant revision, and relevant open/closed GitHub issues with maintainer discussion. Record exact references and source-specific guidance; disclose conflicts and missing/inaccessible issue evidence. Also classify experiment intent, state actual data scope, and list every protocol deviation with prior approval status.",
     ],
     parameters: Type.Object({
       title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
@@ -182,6 +182,22 @@ export default function researchLoop(pi: ExtensionAPI): void {
               }),
               reference: Type.Optional(Type.String({ description: "Reference paper, official run, baseline, or protocol being followed" })),
               dataScope: Type.String({ description: "Actual dataset, split, sample count, and sampling scope used" }),
+              sources: Type.Array(
+                Type.Object({
+                  kind: StringEnum(["paper", "readme", "issue"] as const, {
+                    description: "Reproduction source category",
+                  }),
+                  status: StringEnum(["consulted", "not-found", "inaccessible"] as const, {
+                    description: "Whether the source was reviewed or why it was unavailable",
+                  }),
+                  reference: Type.Optional(Type.String({ description: "Exact paper citation/URL, README revision/path, or issue URL/number" })),
+                  summary: Type.String({ description: "Protocol guidance, correction, known bug, conflict, or documented search outcome" }),
+                }),
+                {
+                  maxItems: 12,
+                  description: "Sources checked for this experiment. Reproductions require paper, README, and issue-search coverage.",
+                },
+              ),
               deviations: Type.Array(
                 Type.Object({
                   field: Type.String({ description: "Protocol field that differs, such as sample count, split, model, preprocessing, or seeds" }),
@@ -380,6 +396,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
           const experimentDetails = formatExperimentDetails(experiment);
           if (experimentDetails) {
             container.addChild(new Text(`${theme.bold("Experimental Details")}\n${experimentDetails}`, 0, 1));
+          }
+          const protocolSources = formatProtocolSources(experiment);
+          if (protocolSources) {
+            container.addChild(new Text(`${theme.bold("Reference Sources")}\n${protocolSources}`, 0, 1));
           }
           const protocolDeviations = formatProtocolDeviations(experiment);
           if (protocolDeviations) {
@@ -787,6 +807,8 @@ function formatCheckpointReport(details: CheckpointDetails): string {
       ];
       const experimentDetails = formatExperimentDetails(experiment);
       if (experimentDetails) parts.push(`Experimental Details\n\n${experimentDetails}`);
+      const protocolSources = formatProtocolSources(experiment);
+      if (protocolSources) parts.push(`Reference Sources\n\n${protocolSources}`);
       const protocolDeviations = formatProtocolDeviations(experiment);
       if (protocolDeviations) parts.push(`Protocol Deviations\n\n${protocolDeviations}`);
       parts.push(experiment.observation);
@@ -849,6 +871,33 @@ function formatExperimentDetails(experiment: CheckpointExperiment): string | und
   ];
   if (rows.length === 0) return undefined;
   return formatTable(["Type", "Name", "Value / Levels", "Why it matters"], rows);
+}
+
+function formatProtocolSources(experiment: CheckpointExperiment): string | undefined {
+  const sources = experiment.protocol?.sources ?? [];
+  const requiredKinds = experiment.protocol?.intent === "reproduction"
+    ? (["paper", "readme", "issue"] as const)
+    : [];
+  const missingKinds = requiredKinds.filter((kind) => !sources.some((source) => source.kind === kind));
+  if (sources.length === 0 && missingKinds.length === 0) return undefined;
+
+  const coverage = formatTable(
+    ["Source", "Status"],
+    [
+      ...sources.map((source) => [source.kind, source.status]),
+      ...missingKinds.map((kind) => [kind, "MISSING"]),
+    ],
+  );
+  const details = [
+    ...sources.map((source) => [
+      `${source.kind} [${source.status}]`,
+      `Reference: ${source.reference ?? (source.status === "consulted" ? "MISSING" : "(none)")}`,
+      `Guidance: ${source.summary}`,
+    ].join("\n")),
+    ...missingKinds.map((kind) =>
+      `${kind} [MISSING]\nGuidance: Required reproduction source was not checked`),
+  ];
+  return `${coverage}\n\n${details.join("\n\n")}`;
 }
 
 function formatProtocolDeviations(experiment: CheckpointExperiment): string | undefined {

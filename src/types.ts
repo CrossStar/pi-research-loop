@@ -98,10 +98,21 @@ export interface ProtocolDeviation {
   approvedByUser: boolean;
 }
 
+export type ProtocolSourceKind = "paper" | "readme" | "issue";
+export type ProtocolSourceStatus = "consulted" | "not-found" | "inaccessible";
+
+export interface ProtocolSource {
+  kind: ProtocolSourceKind;
+  status: ProtocolSourceStatus;
+  reference?: string;
+  summary: string;
+}
+
 export interface ExperimentProtocol {
   intent: ExperimentIntent;
   reference?: string;
   dataScope: string;
+  sources: ProtocolSource[];
   deviations: ProtocolDeviation[];
 }
 

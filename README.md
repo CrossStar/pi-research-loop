@@ -48,6 +48,8 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
 
 复现、基准对比和 reference-result 任务采用 fidelity-first：reference 的数据范围与 split、采样、预处理、模型/checkpoint、objective、评估协议、seeds/repeats 和关键超参都是科学协议的一部分。Agent 不得静默缩小或更改这些条件。小样本 wiring/smoke test 必须作为独立的 `diagnostic` 实验，运行前披露 reference 与 proposed scope、用途和推断限制并获得用户明确批准，结果也不能当作官方复现 evidence。
 
+启动复现前，Agent 必须进行三源核对：阅读官方 paper（包括 appendix/supplement）、相关 commit/tag 下的官方 repository README，并搜索相关 open/closed GitHub issues，优先关注 maintainer 澄清、已知 bug、参数修正和版本兼容信息。必须记录精确 citation、revision 和 issue URL/number。若三者或实际 code behavior 冲突，Agent 应披露冲突及其科学影响，不能静默选择；若没有找到相关 issue 或无法访问，也必须记录搜索结果和限制。
+
 `experiments` 是必填字段，按执行顺序记录从上一次 checkpoint（或本轮用户校准开始）到当前 checkpoint 之间完成的所有关键实验。每个实验拥有独立的动机、设计、protocol provenance、结构化细节、结果表和局部分析；`overallAnalysis` 再综合各实验对假设的共同影响。
 
 ```json
@@ -61,6 +63,25 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
       "protocol": {
         "intent": "exploratory",
         "dataScope": "30 paired responses from the fixed evaluation split",
+        "sources": [
+          {
+            "kind": "paper",
+            "status": "consulted",
+            "reference": "Paper section 4.2",
+            "summary": "Defines the evaluation claim and metric"
+          },
+          {
+            "kind": "readme",
+            "status": "consulted",
+            "reference": "github.com/org/repo@v1.2/README.md",
+            "summary": "Defines the released evaluation command"
+          },
+          {
+            "kind": "issue",
+            "status": "not-found",
+            "summary": "Searched open and closed issues for evaluator and metric terms"
+          }
+        ],
         "deviations": []
       },
       "rationale": "检验初始 length association",
@@ -91,7 +112,7 @@ Fast Mode 会阻止高置信度的全仓测试、全仓格式化、checksum/repr
 }
 ```
 
-每个实验的 `protocol` 必填：`intent` 为 `reproduction|diagnostic|exploratory|ablation`，`dataScope` 必须写实际 dataset、split、sample count 和 sampling scope；复现任务还应填写 `reference`。所有 protocol deviation 都必须结构化记录 reference、actual、原因、推断限制和是否在执行前获得用户批准，并在终端中以醒目的 Protocol Deviations 表展示。
+每个实验的 `protocol` 必填：`intent` 为 `reproduction|diagnostic|exploratory|ablation`，`dataScope` 必须写实际 dataset、split、sample count 和 sampling scope；复现任务还应填写 `reference`。`sources` 记录 `paper|readme|issue`、`consulted|not-found|inaccessible` 状态、精确引用和与协议相关的结论。Reproduction 缺少任一来源类别时，终端的 Reference Sources 表会显示 `MISSING`。所有 protocol deviation 都必须结构化记录 reference、actual、原因、推断限制和是否在执行前获得用户批准，并在终端中以醒目的 Protocol Deviations 表展示。
 
 `setup`、`variables` 和 `parameters` 是可选的结构化实验细节。Setup 用于 Model、Dataset、Loss、Optimizer、Evaluation protocol 等理解 evidence 所需的信息；`parameters` 只记录实验超参。Slurm partition、QoS、节点数、walltime、日志和调度参数不会展示，除非研究问题本身就是系统性能或调度行为。
 
