@@ -12,7 +12,7 @@ import {
 export const STATE_ENTRY = "research-loop-state";
 export const POLICY_MESSAGE = "research-loop-policy";
 
-const CHECKPOINT_REVIEW_INTERVAL = 6;
+const SOFT_REVIEW_INTERVAL = 6;
 const RESEARCH_TOOLS = ["research_mode", "research_checkpoint", "research_abort_experiment"];
 const MUTATING_TOOLS = new Set(["edit", "write", "apply_patch"]);
 
@@ -40,9 +40,9 @@ export class ResearchRuntime {
     artifacts: [],
   };
   private roundActions = 0;
-  private nextCheckpointReviewAt = CHECKPOINT_REVIEW_INTERVAL;
-  private checkpointReviewPending = false;
-  private checkpointReviewRaisedThisTurn = false;
+  private nextSoftReviewAt = SOFT_REVIEW_INTERVAL;
+  private softReviewPending = false;
+  private softReviewRaisedThisTurn = false;
   private checkpointReached = false;
   private checkpointResultCount = 0;
   private toolCallsThisTurn = 0;
@@ -157,7 +157,7 @@ export class ResearchRuntime {
     return researchPolicy(
       this.state.workMode,
       this.roundActions,
-      this.checkpointReviewPending,
+      this.softReviewPending,
       this.state.objective,
       this.state.experiment,
     );
@@ -166,7 +166,7 @@ export class ResearchRuntime {
   startTurn(): void {
     this.toolCallsThisTurn = 0;
     this.terminalToolAccepted = false;
-    this.checkpointReviewRaisedThisTurn = false;
+    this.softReviewRaisedThisTurn = false;
   }
 
   evaluateToolCall(toolName: string, input: unknown, ctx: ExtensionContext): ToolGateDecision | undefined {
@@ -231,7 +231,7 @@ export class ResearchRuntime {
     this.state.experiment = undefined;
     this.checkpointReached = true;
     this.checkpointResultCount = resultCount;
-    this.checkpointReviewPending = false;
+    this.softReviewPending = false;
     this.setToolAvailability();
     this.persist();
     this.renderStatus(ctx);
@@ -259,25 +259,25 @@ export class ResearchRuntime {
   }
 
   private recordAction(): void {
-    if (this.state.workMode === "experiment" && this.checkpointReviewPending && !this.checkpointReviewRaisedThisTurn) {
-      this.checkpointReviewPending = false;
-      while (this.nextCheckpointReviewAt <= this.roundActions) {
-        this.nextCheckpointReviewAt += CHECKPOINT_REVIEW_INTERVAL;
+    if (this.state.workMode === "experiment" && this.softReviewPending && !this.softReviewRaisedThisTurn) {
+      this.softReviewPending = false;
+      while (this.nextSoftReviewAt <= this.roundActions) {
+        this.nextSoftReviewAt += SOFT_REVIEW_INTERVAL;
       }
     }
 
     this.roundActions += 1;
-    if (this.state.workMode === "experiment" && this.roundActions >= this.nextCheckpointReviewAt) {
-      this.checkpointReviewPending = true;
-      this.checkpointReviewRaisedThisTurn = true;
+    if (this.state.workMode === "experiment" && this.roundActions >= this.nextSoftReviewAt) {
+      this.softReviewPending = true;
+      this.softReviewRaisedThisTurn = true;
     }
   }
 
   private resetRound(): void {
     this.roundActions = 0;
-    this.nextCheckpointReviewAt = CHECKPOINT_REVIEW_INTERVAL;
-    this.checkpointReviewPending = false;
-    this.checkpointReviewRaisedThisTurn = false;
+    this.nextSoftReviewAt = SOFT_REVIEW_INTERVAL;
+    this.softReviewPending = false;
+    this.softReviewRaisedThisTurn = false;
     this.checkpointReached = false;
     this.checkpointResultCount = 0;
   }
@@ -295,12 +295,12 @@ export class ResearchRuntime {
       "RESEARCH ON",
       displayMode(this.state.workMode),
       `ACTIONS ${this.roundActions}`,
-      this.checkpointReviewPending ? "CHECKPOINT REVIEW" : undefined,
+      this.softReviewPending ? "SOFT REVIEW" : undefined,
       `OUTPUTS ${this.state.artifacts.length}`,
     ].filter((part): part is string => Boolean(part));
     return {
       text: parts.join(" | "),
-      color: this.checkpointReviewPending
+      color: this.softReviewPending
         ? "warning"
         : this.state.workMode === "experiment"
           ? "success"

@@ -134,14 +134,14 @@ function experimentPolicy(experiment?: ExperimentContext): string {
 export function researchPolicy(
   mode: WorkMode,
   actions: number,
-  checkpointReview: boolean,
+  softReview: boolean,
   objective?: string,
   experiment?: ExperimentContext,
 ): string {
   const modePolicy = mode === "experiment" ? experimentPolicy(experiment) : MODE_POLICY[mode];
   const objectiveLine = objective ? `\nCurrent objective: ${objective}\n` : "";
-  const review = checkpointReview
-    ? "\n\nCHECKPOINT REVIEW:\nReassess evidence, uncertainty, branching, and next-experiment cost. Continue if the current experiment is incomplete and no semantic trigger applies."
+  const review = softReview
+    ? "\n\nSOFT REVIEW:\nThis is a non-blocking semantic check, not a checkpoint trigger or action limit. Tool count cannot create checkpoint eligibility. Reassess evidence, uncertainty, branching, and next-experiment cost; continue the experiment uninterrupted when it is incomplete and no semantic checkpoint condition applies."
     : "";
   return `[RESEARCH LOOP | ${mode.toUpperCase()} MODE]\n\nRound activity: ${actions} tool actions. There is no hard action limit.${objectiveLine}\n${BASE_POLICY}\n\n${modePolicy}${review}`;
 }
