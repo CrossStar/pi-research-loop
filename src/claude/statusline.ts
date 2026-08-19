@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ResearchCoreSnapshot } from "../core/research-core.js";
+import type { WorkMode } from "../core/types.js";
 import { ClaudeStateStore } from "./state-store.js";
 
 interface StatusLineInput {
@@ -17,6 +19,29 @@ interface StatusLineConfig {
   schemaVersion: 1;
   baseCommand?: string;
 }
+
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+interface RailProjection {
+  mode: string;
+  details: string[];
+  accent: Rgb;
+  marker: "◇" | "◆";
+}
+
+const COLORS = {
+  rose: { r: 252, g: 167, b: 234 },
+  blue: { r: 130, g: 170, b: 255 },
+  green: { r: 195, g: 232, b: 141 },
+  cyan: { r: 125, g: 207, b: 255 },
+  amber: { r: 224, g: 175, b: 104 },
+  text: { r: 192, g: 202, b: 245 },
+  muted: { r: 86, g: 95, b: 137 },
+} satisfies Record<string, Rgb>;
 
 async function main(): Promise<void> {
   const rawInput = await readStdin();
@@ -36,23 +61,97 @@ async function main(): Promise<void> {
 async function formatResearchStatus(store: ClaudeStateStore): Promise<string> {
   if (!await store.hasActiveState()) return "";
   const core = await store.loadCore();
-  const status = core.projectStatus();
-  const experiment = core.experiment;
-  const phase = experiment
-    ? ` | PHASE ${experiment.intent.toUpperCase()} · ${truncate(experiment.title, 32)}`
-    : "";
-  return colorize(`${status.text}${phase}`, status.tone);
+  return renderRail(projectRail(core.snapshot()));
 }
 
-function colorize(text: string, tone: "dim" | "success" | "warning" | "accent"): string {
-  if (process.env.NO_COLOR) return text;
-  const color = {
-    dim: "\u001b[2m",
-    success: "\u001b[32m",
-    warning: "\u001b[33m",
-    accent: "\u001b[36m",
-  }[tone];
-  return `${color}${text}\u001b[0m`;
+function projectRail(snapshot: ResearchCoreSnapshot): RailProjection {
+  if (!snapshot.state.enabled) {
+    return { mode: "off", details: [], accent: COLORS.muted, marker: "◇" };
+  }
+  if (snapshot.checkpointReached) {
+    return {
+      mode: "checkpoint",
+      details: [count(snapshot.checkpointResultCount, "result")],
+      accent: COLORS.green,
+      marker: "◆",
+    };
+  }
+
+  const mode = snapshot.state.workMode;
+  const projection: RailProjection = {
+    mode,
+    details: modeDetails(snapshot),
+    accent: modeColor(mode),
+    marker: mode === "experiment" ? "◆" : "◇",
+  };
+  if (snapshot.softReviewPending) {
+    projection.accent = COLORS.amber;
+    projection.details.push("review due");
+  }
+  return projection;
+}
+
+function modeDetails(snapshot: ResearchCoreSnapshot): string[] {
+  switch (snapshot.state.workMode) {
+    case "brainstorming":
+      return ["read only"];
+    case "exploration":
+      return ["blueprint"];
+    case "experiment":
+      return [
+        snapshot.state.experiment?.intent.replace(/-/g, " ") ?? "experiment",
+        count(snapshot.roundActions, "action"),
+        count(snapshot.state.artifacts.length, "output"),
+      ];
+    case "normal":
+      return [
+        count(snapshot.roundActions, "action"),
+        count(snapshot.state.artifacts.length, "output"),
+      ];
+  }
+}
+
+function modeColor(mode: WorkMode): Rgb {
+  return {
+    normal: COLORS.blue,
+    brainstorming: COLORS.rose,
+    exploration: COLORS.cyan,
+    experiment: COLORS.green,
+  }[mode];
+}
+
+function count(value: number, noun: string): string {
+  return `${value} ${noun}${value === 1 ? "" : "s"}`;
+}
+
+function renderRail(projection: RailProjection): string {
+  const plain = [
+    `  ╰─ ${projection.marker} research  ${projection.mode}`,
+    ...projection.details.map((detail) => `  ·  ${detail}`),
+  ].join("");
+  if (process.env.NO_COLOR || process.env.TERM === "dumb") return plain;
+
+  const details = projection.details
+    .map((detail) => `${foreground(COLORS.muted)}  ·  ${foreground(COLORS.text)}${detail}`)
+    .join("");
+  return [
+    foreground(COLORS.muted),
+    "  ╰─ ",
+    foreground(projection.accent),
+    projection.marker,
+    " ",
+    foreground(COLORS.cyan),
+    "research",
+    "  ",
+    foreground(projection.accent),
+    projection.mode,
+    details,
+    "\u001b[0m",
+  ].join("");
+}
+
+function foreground(color: Rgb): string {
+  return `\u001b[38;2;${color.r};${color.g};${color.b}m`;
 }
 
 function runBaseStatusLine(command: string, input: string): string {
@@ -95,10 +194,6 @@ async function readStdin(): Promise<string> {
   let input = "";
   for await (const chunk of process.stdin) input += chunk.toString();
   return input;
-}
-
-function truncate(value: string, limit: number): string {
-  return value.length <= limit ? value : `${value.slice(0, Math.max(1, limit - 1))}…`;
 }
 
 main().catch(() => {

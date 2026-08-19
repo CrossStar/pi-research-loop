@@ -43,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.1.1" });
+const client = new Client({ name: "research-loop-smoke", version: "0.1.3" });
 
 try {
   await client.connect(transport);
@@ -91,8 +91,17 @@ try {
     project,
   );
   assert.match(statusLineText, /BASE/);
-  assert.match(statusLineText, /RESEARCH ON \| EXPERIMENT/);
-  assert.match(statusLineText, /PHASE DIAGNOSTIC/);
+  assert.match(statusLineText, /◆ research  experiment/);
+  assert.match(statusLineText, /diagnostic/);
+  assert.match(statusLineText, /0 actions/);
+  assert.match(statusLineText, /0 outputs/);
+  const styledStatusLineText = await runStatusLine(
+    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
+    project,
+    false,
+  );
+  assert.match(styledStatusLineText, /\u001b\[38;2;195;232;141m◆/);
+  assert.match(styledStatusLineText, /\u001b\[38;2;125;207;255mresearch/);
 
   const checkpoint = await client.callTool({
     name: "research_checkpoint",
@@ -125,6 +134,22 @@ try {
   const text = state.content.find((item) => item.type === "text")?.text ?? "";
   assert.match(text, /CHECKPOINT REACHED/);
   assert.match(text, /"workMode": "normal"/);
+  const checkpointStatusLineText = await runStatusLine(
+    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
+    project,
+  );
+  assert.match(checkpointStatusLineText, /◆ research  checkpoint/);
+  assert.match(checkpointStatusLineText, /0 results/);
+
+  await client.callTool({
+    name: "research_set_enabled",
+    arguments: { enabled: false },
+  });
+  const offStatusLineText = await runStatusLine(
+    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
+    project,
+  );
+  assert.match(offStatusLineText, /◇ research  off/);
 
   const statusLineUninstall = await client.callTool({
     name: "research_configure_statusline",
@@ -145,9 +170,12 @@ try {
   await rm(project, { recursive: true, force: true });
 }
 
-async function runStatusLine(scriptPath, projectDirectory) {
+async function runStatusLine(scriptPath, projectDirectory, noColor = true) {
+  const env = { ...process.env };
+  if (noColor) env.NO_COLOR = "1";
+  else delete env.NO_COLOR;
   const child = spawn(process.execPath, [scriptPath], {
-    env: { ...process.env, NO_COLOR: "1" },
+    env,
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stdin.end(JSON.stringify({

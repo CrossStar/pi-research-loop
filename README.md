@@ -134,17 +134,21 @@ research_abort_experiment
 
 ### Status Line
 
-状态行示例：
+Status Line 使用附属于主状态栏的 Terminal Rail，不修改已有 `ccline` 或其他 command-based
+Status Line：
 
 ```text
-RESEARCH OFF
-RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
-RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3 | PHASE REPRODUCTION · Baseline reproduction
-RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
+  ╰─ ◇ research  off
+  ╰─ ◇ research  normal  ·  2 actions  ·  1 output
+  ╰─ ◇ research  brainstorming  ·  read only
+  ╰─ ◇ research  exploration  ·  blueprint
+  ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
+  ╰─ ◆ research  checkpoint  ·  2 results
 ```
 
-Status Line 直接读取本地 `ResearchCoreSnapshot`，不调用模型或 MCP，不写 Research State，
-并在错误时 fail-open。已有 command-based Status Line 会被保留并显示在 Research Loop 上方。
+OFF 状态保留低对比度弱提示；Experiment 和 Checkpoint 使用实心标记。Status Line 直接读取
+本地 `ResearchCoreSnapshot`，不调用模型或 MCP，不写 Research State，并在错误时
+fail-open。已有 command-based Status Line 会被保留并显示在 Research Loop 上方。
 
 ## Pi 安装
 
