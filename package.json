@@ -1,11 +1,12 @@
 {
   "name": "pi-research-loop",
   "version": "0.1.0",
-  "description": "A bounded, evidence-first research loop for Pi",
+  "description": "An evidence-first research loop for Pi and Claude Code",
   "type": "module",
   "private": true,
   "keywords": [
     "pi-package",
+    "claude-code-plugin",
     "research",
     "agent"
   ],
@@ -15,7 +16,10 @@
     ]
   },
   "scripts": {
-    "check": "tsc --noEmit"
+    "build:claude": "tsc -p tsconfig.claude.json && node scripts/build-claude.mjs",
+    "check": "tsc --noEmit",
+    "check:claude": "npm run build:claude && claude plugin validate --strict .",
+    "test:claude": "npm run build:claude && node tests/core-smoke.mjs && node tests/hook-smoke.mjs && node tests/mcp-smoke.mjs"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -27,8 +31,11 @@
     "@earendil-works/pi-ai": "^0.84.2",
     "@earendil-works/pi-coding-agent": "^0.84.2",
     "@earendil-works/pi-tui": "^0.84.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^24.12.0",
+    "esbuild": "^0.25.12",
     "typebox": "^1.3.7",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^3.25.76"
   }
 }

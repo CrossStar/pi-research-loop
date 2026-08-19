@@ -11,7 +11,14 @@ import {
   type ArtifactRecord,
   type ArtifactPreview,
 } from "./artifacts.js";
-import { formatSignificant, formatTable } from "./table.js";
+import {
+  formatCheckpointReport as formatCoreCheckpointReport,
+  formatExperimentDetails,
+  formatProtocolDeviations,
+  formatProtocolSources,
+  formatResultTable,
+  normalizeCheckpointExperiment as normalizeCoreCheckpointExperiment,
+} from "./core/checkpoint.js";
 
 export type ResearchResultRole = "evidence" | "diagnostic" | "dataset" | "intermediate";
 export type ExperimentVariableRole = "independent" | "dependent" | "control" | "derived";
@@ -30,6 +37,7 @@ export interface CheckpointResultInput {
 }
 
 export interface CheckpointResult {
+  path: string;
   artifact: ArtifactRecord;
   absolutePath: string;
   url: string;
@@ -127,9 +135,6 @@ interface CheckpointDependencies {
   getArtifacts: () => ArtifactRecord[];
   onReached: (resultCount: number, ctx: ExtensionContext) => void;
 }
-
-const INFRASTRUCTURE_FIELD = /(?:^|[._-])(?:slurm|partition|qos|account|job[_-]?name|node(?:s)?|ntasks|cpus?[_-]?per[_-]?task|gres|walltime|time[_-]?limit)(?:$|[._-])/i;
-const SYSTEMS_RESEARCH = /\b(?:slurm|scheduler|scheduling|cluster throughput|cluster utilization|distributed scaling)\b|系统性能|集群吞吐|调度/i;
 
 export function registerResearchCheckpoint(
   pi: ExtensionAPI,
@@ -308,66 +313,11 @@ export function normalizeCheckpointExperiment(
     Partial<Pick<CheckpointExperiment, "setup" | "variables" | "parameters" | "tables">>,
   hypothesis: string,
 ): CheckpointExperiment {
-  const normalized: CheckpointExperiment = {
-    ...experiment,
-    setup: experiment.setup ?? [],
-    variables: experiment.variables ?? [],
-    parameters: experiment.parameters ?? [],
-    tables: experiment.tables ?? [],
-  };
-  if (SYSTEMS_RESEARCH.test(`${hypothesis}\n${normalized.rationale}\n${normalized.design}`)) return normalized;
-  return {
-    ...normalized,
-    setup: normalized.setup.filter((detail) => !INFRASTRUCTURE_FIELD.test(detail.name)),
-    parameters: normalized.parameters.filter((parameter) => !INFRASTRUCTURE_FIELD.test(parameter.name)),
-  };
+  return normalizeCoreCheckpointExperiment(experiment, hypothesis);
 }
 
 export function formatCheckpointReport(details: CheckpointDetails): string {
-  const sections = [
-    `# Checkpoint: ${details.title}`,
-    `## Research Question\n\n${details.researchQuestion}\n\nWorking hypothesis: ${details.hypothesis}`,
-  ];
-  const experimentReports = details.experiments.map((experiment, index) => {
-    const parts = [
-      `### Experiment ${index + 1} - ${experiment.title}`,
-      experiment.rationale,
-      experiment.design,
-    ];
-    const experimentDetails = formatExperimentDetails(experiment);
-    if (experimentDetails) parts.push(`Experimental Details\n\n${experimentDetails}`);
-    const protocolSources = formatProtocolSources(experiment);
-    if (protocolSources) parts.push(`Reference Sources\n\n${protocolSources}`);
-    const protocolDeviations = formatProtocolDeviations(experiment);
-    if (protocolDeviations) parts.push(`Protocol Deviations\n\n${protocolDeviations}`);
-    parts.push(experiment.observation);
-    experiment.tables.forEach((table) => {
-      parts.push(table.title ? `${table.title}\n\n${formatResultTable(table)}` : formatResultTable(table));
-    });
-    parts.push(experiment.analysis);
-    details.results
-      .filter((result) => result.experiment === experiment.title)
-      .forEach((result) => {
-        parts.push(
-          [".png", ".jpg", ".jpeg"].includes(result.artifact.extension)
-            ? `![${result.title}](${result.artifact.path})`
-            : `Related artifact: ${result.artifact.path}`,
-        );
-      });
-    return parts.join("\n\n");
-  });
-  sections.push(`## Condition & Result\n\n${experimentReports.join("\n\n")}`);
-
-  const conclusion = details.conclusion
-    ? `\n\n${details.conclusion.split("\n").map((line) => `> ${line}`).join("\n")}`
-    : "";
-  sections.push(`## Overall Analysis\n\n${details.overallAnalysis}${conclusion}`);
-  sections.push(`## Uncertainty\n\n${details.uncertainty}`);
-  sections.push(`## Next\n\n${details.next}`);
-  if (details.results.length > 0) {
-    sections.push(`## Relevant Artifacts\n\n${details.results.map((result) => `- ${result.artifact.path}`).join("\n")}`);
-  }
-  return sections.join("\n\n");
+  return formatCoreCheckpointReport(details);
 }
 
 async function prepareCheckpointResults(
@@ -383,6 +333,7 @@ async function prepareCheckpointResults(
     const absolutePath = resolve(ctx.cwd, resolvedRecord.path);
     const artifact = discovered.find((candidate) => resolve(ctx.cwd, candidate.path) === absolutePath) ?? resolvedRecord;
     const result: CheckpointResult = {
+      path: artifact.path,
       artifact,
       absolutePath,
       url: pathToFileURL(absolutePath).href,
@@ -492,81 +443,6 @@ function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
     container.addChild(new Text(`${theme.fg("accent", theme.bold("Relevant Artifacts"))}\n${links.join("\n")}`, 0, 1));
   }
   return container;
-}
-
-function formatExperimentDetails(experiment: CheckpointExperiment): string | undefined {
-  const protocolRows = [
-    ["Protocol", "Intent", experiment.protocol.intent, "Scientific role of this run"],
-    ["Protocol", "Data scope", experiment.protocol.dataScope, "Actual data used"],
-    ...(experiment.protocol.reference
-      ? [["Protocol", "Reference", experiment.protocol.reference, "Target protocol or result"]]
-      : experiment.protocol.intent === "reproduction"
-        ? [["Protocol", "Reference", "MISSING", "Reproduction reference was not supplied"]]
-        : []),
-  ];
-  const rows = [
-    ...protocolRows,
-    ...experiment.setup.map((detail) => ["Setup", detail.name, detail.value, detail.description ?? ""]),
-    ...experiment.variables.map((variable) => [variable.role, variable.name, variable.value ?? "", variable.description]),
-    ...experiment.parameters.map((parameter) => ["Hyperparameter", parameter.name, parameter.value, parameter.rationale ?? ""]),
-  ];
-  return rows.length > 0
-    ? formatTable(["Type", "Name", "Value / Levels", "Why it matters"], rows)
-    : undefined;
-}
-
-function formatProtocolSources(experiment: CheckpointExperiment): string | undefined {
-  const sources = experiment.protocol.sources;
-  const requiredKinds = experiment.protocol.intent === "reproduction" ? (["paper", "readme", "issue"] as const) : [];
-  const missingKinds = requiredKinds.filter((kind) => !sources.some((source) => source.kind === kind));
-  if (sources.length === 0 && missingKinds.length === 0) return undefined;
-
-  const coverage = formatTable(
-    ["Source", "Status"],
-    [
-      ...sources.map((source) => [source.kind, source.status]),
-      ...missingKinds.map((kind) => [kind, "MISSING"]),
-    ],
-  );
-  const sourceDetails = [
-    ...sources.map((source) => [
-      `${source.kind} [${source.status}]`,
-      `Reference: ${source.reference ?? (source.status === "consulted" ? "MISSING" : "(none)")}`,
-      `Guidance: ${source.summary}`,
-    ].join("\n")),
-    ...missingKinds.map((kind) => `${kind} [MISSING]\nGuidance: Required reproduction source was not checked`),
-  ];
-  return `${coverage}\n\n${sourceDetails.join("\n\n")}`;
-}
-
-function formatProtocolDeviations(experiment: CheckpointExperiment): string | undefined {
-  if (experiment.protocol.deviations.length === 0) return undefined;
-  return formatTable(
-    ["Field", "Reference", "Actual", "Reason / Limit", "Approved"],
-    experiment.protocol.deviations.map((deviation) => [
-      deviation.field,
-      deviation.reference,
-      deviation.actual,
-      deviation.reason,
-      deviation.approvedByUser ? "yes" : "NO",
-    ]),
-  );
-}
-
-function formatResultTable(table: ExperimentResultTable): string {
-  return formatTable(
-    table.columns,
-    table.rows.map((row) => table.columns.map((_, index) => formatResultCell(row[index]))),
-  );
-}
-
-function formatResultCell(cell: ResultTableCell | undefined): string {
-  if (!cell) return "";
-  if (cell.value !== undefined) {
-    const value = formatSignificant(cell.value, cell.significantDigits ?? 4, cell.significantDigits !== undefined);
-    return cell.unit ? `${value} ${cell.unit}` : value;
-  }
-  return cell.text ?? "";
 }
 
 function terminalLink(url: string, label: string): string {

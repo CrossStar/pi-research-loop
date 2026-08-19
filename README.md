@@ -1,12 +1,14 @@
 # Pi Research Loop
 
-Pi Research Loop 是一个面向科研 Agent 的 Pi 扩展。它不替 Agent 做研究决策，
-而是为交流、头脑风暴、实验代码理解和实验执行提供明确的工作契约，并在实验产生
-evidence 后通过 checkpoint 将控制权交还给用户。
+Pi Research Loop 是一个面向科研 Agent 的 evidence-first Research Loop，现同时提供
+Pi Extension 和 Claude Code Plugin。项目与主仓库继续使用 `pi-research-loop` 名称。
+它不替 Agent 做研究决策，而是为交流、头脑风暴、实验代码理解和实验执行提供明确
+的工作契约，并在实验产生 evidence 后通过 checkpoint 将控制权交还给用户。
 
 ## 核心特性
 
-- **简单开关**：使用 `/research on|off` 启用或停用 Research Loop，不区分 Fast 或 Normal profile。
+- **简单开关**：Pi 使用 `/research on|off`；Claude Code 通过 Research Loop Skill 和
+  `research_set_enabled` MCP tool 启用或停用，不区分 Fast 或 Normal profile。
 - **自主模式选择**：Agent 根据当前不确定性的类型，在 Normal、Brainstorming、
   Exploration 和 Experiment 四种 Work Mode 之间切换；用户指令始终具有更高优先级。
 - **语义化 checkpoint**：checkpoint 由 evidence、decision、cost、uncertainty 和
@@ -18,20 +20,39 @@ evidence 后通过 checkpoint 将控制权交还给用户。
 
 ## 安装
 
-### 从 GitHub 安装
+### Pi：从 GitHub 安装
 
 ```bash
 pi install git:github.com/CrossStar/pi-research-loop
 ```
 
-### 本地运行
+### Pi：本地运行
 
 ```bash
 npm install
 pi -ne -e .
 ```
 
-## 快速开始
+### Claude Code：本地加载
+
+仓库包含已构建的 Claude Code Plugin。可直接从仓库根目录加载：
+
+```bash
+claude --plugin-dir .
+```
+
+修改 `src/core/` 或 `src/claude/` 后，重新构建再加载：
+
+```bash
+npm install
+npm run build:claude
+claude --plugin-dir .
+```
+
+Claude Plugin 的开发说明和已知限制见
+[`docs/claude-plugin.md`](docs/claude-plugin.md)。
+
+## Pi 快速开始
 
 Research Loop 默认关闭。进入 Pi 后，使用以下命令控制扩展：
 
@@ -59,6 +80,37 @@ Research Loop 默认关闭。进入 Pi 后，使用以下命令控制扩展：
 ```text
 /artifacts
 ```
+
+## Claude Code 快速开始
+
+使用自然语言要求 Claude “启用 Research Loop”，或显式调用
+`/pi-research-loop:research-loop` Skill。Claude 会通过 Plugin MCP tools 维护状态：
+
+```text
+research_set_enabled
+research_mode
+research_state
+research_checkpoint
+research_abort_experiment
+```
+
+Plugin hooks 会在 `SessionStart` 和 `UserPromptSubmit` 注入当前 Research Policy，在
+`PreToolUse` 阶段执行 Governor，并在写入受支持的 artifact 文件后记录 metadata。
+Research Loop 默认关闭；启用后从 Normal Mode 开始。
+
+## 架构
+
+```text
+src/core/       与 Agent Harness 无关的状态、Governor、Policy、Checkpoint 和 Artifact metadata
+src/            Pi Extension adapter、Pi session persistence、TUI 和 artifact preview
+src/claude/     Claude Code state store、Hooks handler 和 MCP server
+skills/         Claude Code Research Loop Skill
+hooks/          Claude Code Hook registration
+```
+
+四种 Work Mode 始终表示同一个主 Agent 的全局行为契约，而不是四个 subagents。Pi 和
+Claude Code 共享 `ResearchCore`、Governor、Research Policy 和 checkpoint
+normalization；各 adapter 只负责宿主注册、生命周期输入输出、持久化与体验层能力。
 
 ## 设计原则
 

@@ -1,24 +1,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { resolveArtifactMetadata } from "./core/artifacts.js";
+import type { ArtifactMetadata } from "./core/types.js";
 import { createReadStream, type FSWatcher, watch } from "node:fs";
-import { open, opendir, readFile, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { formatTable } from "./table.js";
 
-export type ArtifactKind = "file" | "dataset";
-
-export interface ArtifactRecord {
-  kind: ArtifactKind;
-  path: string;
-  name: string;
-  extension: string;
-  size: number;
-  mtimeMs: number;
-  discoveredAt: number;
-  fileCount?: number;
-  fileCountCapped?: boolean;
-  samplePath?: string;
-}
+export type { ArtifactKind } from "./core/types.js";
+export type ArtifactRecord = ArtifactMetadata;
 
 const SUPPORTED_EXTENSIONS = new Set([
   ".png",
@@ -201,28 +191,7 @@ export class ArtifactRadar {
 }
 
 export async function resolveArtifactRecord(cwd: string, inputPath: string): Promise<ArtifactRecord | undefined> {
-  const cleanPath = inputPath.startsWith("@") ? inputPath.slice(1) : inputPath;
-  const absolutePath = resolve(cwd, cleanPath);
-
-  try {
-    const fileStat = await stat(absolutePath);
-    if (fileStat.isDirectory()) return scanDatasetDirectory(cwd, absolutePath, fileStat.mtimeMs);
-    if (!fileStat.isFile()) return undefined;
-
-    const extension = extname(absolutePath).toLowerCase();
-    if (!SUPPORTED_EXTENSIONS.has(extension)) return undefined;
-    return {
-      kind: "file",
-      path: relative(cwd, absolutePath).split(sep).join("/"),
-      name: basename(absolutePath),
-      extension,
-      size: fileStat.size,
-      mtimeMs: fileStat.mtimeMs,
-      discoveredAt: Date.now(),
-    };
-  } catch {
-    return undefined;
-  }
+  return resolveArtifactMetadata(cwd, inputPath);
 }
 
 export async function loadArtifactPreview(
@@ -298,62 +267,6 @@ function isDatasetShard(path: string, extension: string): boolean {
   return /(?:^|[-_.])(?:part|shard|chunk|batch)[-_.]?\d+/i.test(name)
     || /-\d{3,}-of-\d{3,}\./i.test(name)
     || /^\d{3,}\.(?:csv|parquet)$/i.test(name);
-}
-
-async function scanDatasetDirectory(
-  cwd: string,
-  absoluteDirectory: string,
-  directoryMtimeMs: number,
-): Promise<ArtifactRecord | undefined> {
-  const queue = [absoluteDirectory];
-  const maxEntries = 500;
-  const maxFiles = 200;
-  let entriesSeen = 0;
-  let capped = false;
-  const files: Array<{ path: string; extension: string; size: number; mtimeMs: number }> = [];
-
-  while (queue.length > 0 && files.length < maxFiles && entriesSeen < maxEntries) {
-    const directory = queue.shift();
-    if (!directory) break;
-    const handle = await opendir(directory);
-    for await (const entry of handle) {
-      entriesSeen += 1;
-      if (entriesSeen >= maxEntries) {
-        capped = true;
-        break;
-      }
-      if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) queue.push(resolve(directory, entry.name));
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const extension = extname(entry.name).toLowerCase();
-      if (!TABLE_EXTENSIONS.has(extension)) continue;
-      const path = resolve(directory, entry.name);
-      const fileStat = await stat(path);
-      files.push({ path, extension, size: fileStat.size, mtimeMs: fileStat.mtimeMs });
-      if (files.length >= maxFiles) {
-        capped = true;
-        break;
-      }
-    }
-  }
-
-  if (files.length === 0) return undefined;
-  const primaryExtension = files[0]?.extension ?? ".dataset";
-  const displayPath = relative(cwd, absoluteDirectory).split(sep).join("/") || ".";
-  return {
-    kind: "dataset",
-    path: displayPath,
-    name: basename(absoluteDirectory),
-    extension: primaryExtension,
-    size: files.reduce((total, file) => total + file.size, 0),
-    mtimeMs: Math.max(directoryMtimeMs, ...files.map((file) => file.mtimeMs)),
-    discoveredAt: Date.now(),
-    fileCount: files.length,
-    fileCountCapped: capped,
-    samplePath: relative(cwd, files[0]!.path).split(sep).join("/"),
-  };
 }
 
 function datasetMetadata(record: ArtifactRecord): string {
