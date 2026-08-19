@@ -9,6 +9,21 @@ import {
   validateCheckpoint,
 } from "../dist/core/checkpoint.js";
 
+const transitionCore = new ResearchCore();
+transitionCore.setEnabled(true);
+transitionCore.startTurn();
+assert.equal(transitionCore.evaluateToolCall("research_mode", {}), undefined);
+assert.match(
+  transitionCore.evaluateToolCall("Agent", {})?.reason ?? "",
+  /transition to finish/,
+);
+assert.equal(transitionCore.finishToolCall("research_mode"), true);
+assert.equal(transitionCore.evaluateToolCall("Agent", {}), undefined);
+assert.equal(transitionCore.finishToolCall("Agent"), true);
+assert.equal(transitionCore.evaluateToolCall("Read", {}), undefined);
+assert.equal(transitionCore.finishToolCall("Read"), true);
+assert.equal(transitionCore.evaluateToolCall("research_mode", {}), undefined);
+
 const core = new ResearchCore();
 assert.equal(core.enabled, false);
 core.setEnabled(true);

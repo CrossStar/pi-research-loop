@@ -11,6 +11,7 @@ export class ResearchCore {
     checkpointReached = false;
     checkpointResultCount = 0;
     toolCallsThisTurn = 0;
+    inFlightToolCount = 0;
     terminalToolAccepted = false;
     currentUserPrompt = "";
     constructor(initial) {
@@ -99,6 +100,7 @@ export class ResearchCore {
     }
     startTurn() {
         this.toolCallsThisTurn = 0;
+        this.inFlightToolCount = 0;
         this.terminalToolAccepted = false;
         this.softReviewRaisedThisTurn = false;
     }
@@ -106,8 +108,10 @@ export class ResearchCore {
         if (!this.state.enabled)
             return undefined;
         const researchTool = identifyResearchTool(toolName);
-        if (researchTool === "research_state")
+        if (researchTool === "research_state") {
+            this.acceptWorkTool();
             return undefined;
+        }
         if (researchTool === "research_checkpoint") {
             if (this.state.workMode !== "experiment") {
                 return { block: true, reason: "research_checkpoint is available only in Experiment Mode." };
@@ -133,13 +137,11 @@ export class ResearchCore {
             return this.acceptTerminalTool("research_set_enabled");
         }
         if (this.terminalToolAccepted) {
-            this.toolCallsThisTurn += 1;
             return {
                 block: true,
-                reason: "No work tool may run in the same batch after a research lifecycle transition.",
+                reason: "Wait for the research lifecycle transition to finish before running a work tool.",
             };
         }
-        this.toolCallsThisTurn += 1;
         const normalizedTool = toolName.toLowerCase();
         if ((this.state.workMode === "brainstorming" || this.state.workMode === "exploration")
             && MUTATING_TOOLS.has(normalizedTool)) {
@@ -166,7 +168,21 @@ export class ResearchCore {
                 return decision;
         }
         this.recordAction();
+        this.acceptWorkTool();
         return undefined;
+    }
+    finishToolCall(toolName) {
+        let changed = false;
+        if (this.inFlightToolCount > 0) {
+            this.inFlightToolCount -= 1;
+            changed = true;
+        }
+        const researchTool = identifyResearchTool(toolName);
+        if (this.terminalToolAccepted && isLifecycleTool(researchTool)) {
+            this.terminalToolAccepted = false;
+            changed = true;
+        }
+        return changed;
     }
     projectStatus() {
         if (!this.state.enabled)
@@ -203,6 +219,7 @@ export class ResearchCore {
             checkpointReached: this.checkpointReached,
             checkpointResultCount: this.checkpointResultCount,
             toolCallsThisTurn: this.toolCallsThisTurn,
+            inFlightToolCount: this.inFlightToolCount,
             terminalToolAccepted: this.terminalToolAccepted,
             currentUserPrompt: this.currentUserPrompt,
         };
@@ -229,19 +246,25 @@ export class ResearchCore {
         this.checkpointReached = snapshot.checkpointReached === true;
         this.checkpointResultCount = nonNegativeInteger(snapshot.checkpointResultCount, 0);
         this.toolCallsThisTurn = nonNegativeInteger(snapshot.toolCallsThisTurn, 0);
+        this.inFlightToolCount = nonNegativeInteger(snapshot.inFlightToolCount, 0);
         this.terminalToolAccepted = snapshot.terminalToolAccepted === true;
         this.currentUserPrompt = typeof snapshot.currentUserPrompt === "string" ? snapshot.currentUserPrompt : "";
     }
     acceptTerminalTool(toolName) {
-        if (this.toolCallsThisTurn > 0) {
+        if (this.inFlightToolCount > 0) {
             return {
                 block: true,
-                reason: `${toolName} must be the only tool in its batch.`,
+                reason: `${toolName} must wait for in-flight work tools to finish.`,
             };
         }
         this.terminalToolAccepted = true;
         this.toolCallsThisTurn += 1;
+        this.inFlightToolCount += 1;
         return undefined;
+    }
+    acceptWorkTool() {
+        this.toolCallsThisTurn += 1;
+        this.inFlightToolCount += 1;
     }
     recordAction() {
         if (this.state.workMode === "experiment" && this.softReviewPending && !this.softReviewRaisedThisTurn) {
@@ -279,6 +302,12 @@ function identifyResearchTool(toolName) {
         "research_abort_experiment",
         "research_state",
     ].find((name) => toolName === name || toolName.endsWith(`__${name}`));
+}
+function isLifecycleTool(toolName) {
+    return toolName === "research_set_enabled"
+        || toolName === "research_mode"
+        || toolName === "research_checkpoint"
+        || toolName === "research_abort_experiment";
 }
 function isShellTool(toolName) {
     return toolName === "bash" || toolName === "shell" || toolName === "exec";

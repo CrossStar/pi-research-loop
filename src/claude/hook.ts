@@ -59,14 +59,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (event === "PostToolUse") {
+  if (event === "PostToolUse" || event === "PostToolUseFailure") {
+    const toolFinished = core.finishToolCall(input.tool_name ?? "");
+    if (event === "PostToolUseFailure") {
+      if (toolFinished) await store.saveCore(core, input.session_id);
+      return;
+    }
+
     const artifactPath = extractWrittenPath(input.tool_name, input.tool_input);
-    if (!artifactPath || !core.enabled) return;
-    const artifact = await resolveArtifactMetadata(store.cwd, artifactPath);
-    if (!artifact) return;
-    core.upsertArtifact(artifact);
-    await store.saveCore(core, input.session_id);
-    emitContext(event, `Artifact Radar indexed ${artifact.kind}: ${artifact.path}`);
+    const artifact = artifactPath && core.enabled
+      ? await resolveArtifactMetadata(store.cwd, artifactPath)
+      : undefined;
+    if (artifact) core.upsertArtifact(artifact);
+    if (toolFinished || artifact) await store.saveCore(core, input.session_id);
+    if (artifact) emitContext(event, `Artifact Radar indexed ${artifact.kind}: ${artifact.path}`);
   }
 }
 
