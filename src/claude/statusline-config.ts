@@ -84,10 +84,10 @@ export async function getClaudeStatusLineStatus(): Promise<StatusLineConfigurati
 }
 
 function statusLinePaths() {
-  const claudeHome = process.env.PI_RESEARCH_LOOP_CLAUDE_HOME
-    ? resolve(process.env.PI_RESEARCH_LOOP_CLAUDE_HOME)
+  const claudeHome = process.env.RESEARCH_LOOP_CLAUDE_HOME
+    ? resolve(process.env.RESEARCH_LOOP_CLAUDE_HOME)
     : join(homedir(), ".claude");
-  const installDirectory = join(claudeHome, "pi-research-loop");
+  const installDirectory = join(claudeHome, "research-loop");
   const scriptPath = join(installDirectory, "statusline.mjs");
   const configPath = join(installDirectory, "statusline-config.json");
   const settingsPath = join(claudeHome, "settings.json");
@@ -141,7 +141,7 @@ function isOurStatusLine(statusLine: unknown, command: string): boolean {
   const configured = commandFromStatusLine(statusLine);
   if (configured === command) return true;
   return typeof configured === "string"
-    && /pi-research-loop[\\/]statusline\.(?:mjs|js)["']?\s*$/.test(configured.replace(/\\\\/g, "/"));
+    && /research-loop[\\/]statusline\.(?:mjs|js)["']?\s*$/.test(configured.replace(/\\\\/g, "/"));
 }
 
 async function writeJsonAtomic(path: string, value: unknown): Promise<void> {

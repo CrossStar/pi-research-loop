@@ -1,7 +1,7 @@
 # Claude Code Plugin 迁移说明
 
-本文记录 `claude-plugin` 分支第一阶段的代码库分析、迁移边界、运行方式和后续计划。
-项目名、Plugin 名和仓库名均保持 `pi-research-loop`。
+本文记录 Claude Code Plugin 的代码库分析、迁移边界、运行方式和后续计划。
+项目名、Plugin 名、Marketplace 名和 GitHub 仓库名统一为 `research-loop`。
 
 ## 代码库分析
 
@@ -21,7 +21,7 @@
 ## 当前结构
 
 ```text
-pi-research-loop/
+research-loop/
 ├── src/core/
 │   ├── types.ts          # Work Mode、Experiment Context、Research State、Artifact metadata
 │   ├── governor.ts       # Research Policy、fidelity 和 command gates
@@ -42,7 +42,9 @@ pi-research-loop/
 │   └── statusline-cli.ts    # 本地 install/status/uninstall CLI
 ├── skills/research-loop/SKILL.md
 ├── hooks/hooks.json
-└── .claude-plugin/plugin.json # manifest and bundled MCP server registration
+└── .claude-plugin/
+    ├── plugin.json      # Plugin manifest and bundled MCP server registration
+    └── marketplace.json # Self-hosted Claude Code Marketplace manifest
 ```
 
 ## Claude 原生机制映射
@@ -123,7 +125,7 @@ Hook 和 MCP server 是独立进程，不能依赖单个 JavaScript 进程内存
 `ResearchCoreSnapshot` 写入操作系统临时目录：
 
 ```text
-$TMP/pi-research-loop/<project-path-hash>/state.json
+$TMP/research-loop/<project-path-hash>/state.json
 ```
 
 状态包含 session id、Work Mode、Experiment Context、artifacts、action counters、当前用户
@@ -134,6 +136,16 @@ Research Loop OFF 开始。
 可能互相覆盖 active session。后续可在 Claude MCP transport 提供稳定 session identity 后
 改为完整的 per-session routing；在此之前，同一 worktree 建议只运行一个启用 Research
 Loop 的 Claude session。
+
+## Marketplace 安装
+
+```bash
+claude plugin marketplace add CrossStar/research-loop
+claude plugin install research-loop@research-loop
+```
+
+仓库根目录同时是 Plugin source，因此 Marketplace entry 使用 `"source": "./"`。Plugin
+和 Marketplace version 必须保持一致，发布 tag 使用 `research-loop--v<version>`。
 
 ## 本地开发与加载
 
@@ -151,7 +163,7 @@ claude --plugin-dir .
 在 Claude Code 中可使用自然语言要求“启用 Research Loop”，或调用：
 
 ```text
-/pi-research-loop:research-loop
+/research-loop:research-loop
 ```
 
 使用 `/mcp` 检查 `research-loop` server 及 tools 是否已连接，使用 `/hooks` 检查 Plugin
@@ -162,7 +174,8 @@ hooks 是否已注册。
 ```bash
 npm run check
 npm run test:claude
-claude plugin validate --strict .
+claude plugin validate --strict .claude-plugin/plugin.json
+claude plugin validate --strict .claude-plugin/marketplace.json
 ```
 
 `test:claude` 包含：

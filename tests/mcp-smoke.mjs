@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const project = await mkdtemp(join(tmpdir(), "pi-research-loop-mcp-"));
+const project = await mkdtemp(join(tmpdir(), "research-loop-mcp-"));
 const claudeHome = join(project, "claude-home");
 await mkdir(claudeHome, { recursive: true });
 await writeFile(
@@ -18,14 +18,14 @@ const environment = Object.fromEntries(
   Object.entries(process.env).filter((entry) => typeof entry[1] === "string"),
 );
 environment.CLAUDE_PROJECT_DIR = project;
-environment.PI_RESEARCH_LOOP_CLAUDE_HOME = claudeHome;
+environment.RESEARCH_LOOP_CLAUDE_HOME = claudeHome;
 
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "pi-research-loop-smoke", version: "0.1.0" });
+const client = new Client({ name: "research-loop-smoke", version: "0.1.0" });
 
 try {
   await client.connect(transport);
@@ -64,11 +64,11 @@ try {
     arguments: { action: "install" },
   });
   assert.equal(statusLineInstall.isError, undefined);
-  const settingsPath = join(environment.PI_RESEARCH_LOOP_CLAUDE_HOME, "settings.json");
+  const settingsPath = join(environment.RESEARCH_LOOP_CLAUDE_HOME, "settings.json");
   const settings = JSON.parse(await readFile(settingsPath, "utf8"));
-  assert.match(settings.statusLine.command, /pi-research-loop\/statusline\.mjs/);
+  assert.match(settings.statusLine.command, /research-loop\/statusline\.mjs/);
   const statusLineText = await runStatusLine(
-    join(environment.PI_RESEARCH_LOOP_CLAUDE_HOME, "pi-research-loop", "statusline.mjs"),
+    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
     project,
   );
   assert.match(statusLineText, /BASE/);

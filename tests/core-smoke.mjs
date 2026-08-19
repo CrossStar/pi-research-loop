@@ -59,7 +59,7 @@ const incompleteReproduction = structuredClone(checkpoint);
 incompleteReproduction.experiments[0].protocol.intent = "reproduction";
 assert.equal(validateCheckpoint(incompleteReproduction).valid, false);
 
-const artifactDirectory = await mkdtemp(join(tmpdir(), "pi-research-loop-artifact-"));
+const artifactDirectory = await mkdtemp(join(tmpdir(), "research-loop-artifact-"));
 try {
   const artifactPath = join(artifactDirectory, "metrics.json");
   await writeFile(artifactPath, "{\"loss\": 0.1}\n", "utf8");

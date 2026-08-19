@@ -21,7 +21,7 @@ import {
 
 const VERSION = "0.1.0";
 const store = new ClaudeStateStore();
-const server = new McpServer({ name: "pi-research-loop", version: VERSION });
+const server = new McpServer({ name: "research-loop", version: VERSION });
 
 const modeSchema = z.enum(["normal", "brainstorming", "exploration", "experiment"]);
 const intentSchema = z.enum(["reproduction", "diagnostic", "exploratory", "ablation"]);

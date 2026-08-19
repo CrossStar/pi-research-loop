@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ClaudeStateStore } from "../dist/claude/state-store.js";
 
-const project = await mkdtemp(join(tmpdir(), "pi-research-loop-hook-"));
+const project = await mkdtemp(join(tmpdir(), "research-loop-hook-"));
 const sessionId = `hook-smoke-${Date.now()}`;
 
 try {

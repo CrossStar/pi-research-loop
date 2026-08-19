@@ -1,13 +1,13 @@
 {
-  "name": "pi-research-loop",
+  "name": "research-loop",
   "version": "0.1.0",
   "description": "Evidence-first research work modes, lifecycle governance, and checkpoints for Claude Code",
   "author": {
     "name": "CrossStar",
     "url": "https://github.com/CrossStar"
   },
-  "repository": "https://github.com/CrossStar/pi-research-loop",
-  "homepage": "https://github.com/CrossStar/pi-research-loop",
+  "repository": "https://github.com/CrossStar/research-loop",
+  "homepage": "https://github.com/CrossStar/research-loop",
   "mcpServers": {
     "research-loop": {
       "command": "node",

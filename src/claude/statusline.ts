@@ -65,7 +65,7 @@ function runBaseStatusLine(command: string, input: string): string {
       encoding: "utf8",
       timeout: 2_000,
       maxBuffer: 1024 * 1024,
-      env: { ...process.env, PI_RESEARCH_LOOP_STATUSLINE_NESTED: "1" },
+      env: { ...process.env, RESEARCH_LOOP_STATUSLINE_NESTED: "1" },
     });
     return result.stdout ?? "";
   } catch {

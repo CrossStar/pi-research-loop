@@ -79,7 +79,7 @@ function emitContext(event: string, additionalContext: string): void {
 function offContext(): string {
   return [
     "[RESEARCH LOOP | OFF]",
-    "The pi-research-loop Claude Code Plugin is loaded, but its research governor is disabled.",
+    "The research-loop Claude Code Plugin is loaded, but its research governor is disabled.",
     "Use the research-loop skill or research_set_enabled MCP tool to enable it for this session.",
   ].join("\n");
 }
@@ -101,6 +101,6 @@ async function readInput(): Promise<HookInput | undefined> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`pi-research-loop hook failed open: ${String(error)}\n`);
+  process.stderr.write(`research-loop hook failed open: ${String(error)}\n`);
   process.exitCode = 0;
 });

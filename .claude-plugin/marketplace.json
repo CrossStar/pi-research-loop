@@ -1,0 +1,37 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "research-loop",
+  "description": "Evidence-first research work modes, experiment governance, and checkpoints for Claude Code.",
+  "owner": {
+    "name": "CrossStar",
+    "url": "https://github.com/CrossStar"
+  },
+  "plugins": [
+    {
+      "name": "research-loop",
+      "source": "./",
+      "description": "A session-wide research state machine with governed work modes, persistent experiment lifecycle, structured checkpoints, artifact metadata, and a composable status line.",
+      "version": "0.1.0",
+      "author": {
+        "name": "CrossStar",
+        "url": "https://github.com/CrossStar"
+      },
+      "homepage": "https://github.com/CrossStar/research-loop",
+      "repository": "https://github.com/CrossStar/research-loop",
+      "keywords": [
+        "research",
+        "experiments",
+        "evidence",
+        "reproduction",
+        "claude-code"
+      ],
+      "category": "productivity",
+      "tags": [
+        "research",
+        "experiments",
+        "work-modes",
+        "checkpoints"
+      ]
+    }
+  ]
+}

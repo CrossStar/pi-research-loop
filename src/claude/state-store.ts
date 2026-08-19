@@ -20,7 +20,7 @@ export class ClaudeStateStore {
   constructor(cwd = process.env.CLAUDE_PROJECT_DIR ?? process.cwd()) {
     this.cwd = resolve(cwd);
     const projectKey = createHash("sha256").update(this.cwd).digest("hex").slice(0, 20);
-    this.statePath = join(tmpdir(), "pi-research-loop", projectKey, "state.json");
+    this.statePath = join(tmpdir(), "research-loop", projectKey, "state.json");
   }
 
   async beginSession(sessionId: string): Promise<ResearchCore> {
