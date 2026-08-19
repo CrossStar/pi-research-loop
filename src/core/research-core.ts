@@ -27,7 +27,6 @@ export interface ResearchCoreSnapshot {
   checkpointReached: boolean;
   checkpointResultCount: number;
   toolCallsThisTurn: number;
-  inFlightToolCount: number;
   terminalToolAccepted: boolean;
   currentUserPrompt: string;
 }
@@ -41,7 +40,6 @@ export class ResearchCore {
   private checkpointReached = false;
   private checkpointResultCount = 0;
   private toolCallsThisTurn = 0;
-  private inFlightToolCount = 0;
   private terminalToolAccepted = false;
   private currentUserPrompt = "";
 
@@ -148,7 +146,6 @@ export class ResearchCore {
 
   startTurn(): void {
     this.toolCallsThisTurn = 0;
-    this.inFlightToolCount = 0;
     this.terminalToolAccepted = false;
     this.softReviewRaisedThisTurn = false;
   }
@@ -157,10 +154,7 @@ export class ResearchCore {
     if (!this.state.enabled) return undefined;
 
     const researchTool = identifyResearchTool(toolName);
-    if (researchTool === "research_state") {
-      this.acceptWorkTool();
-      return undefined;
-    }
+    if (researchTool === "research_state") return undefined;
     if (researchTool === "research_checkpoint") {
       if (this.state.workMode !== "experiment") {
         return { block: true, reason: "research_checkpoint is available only in Experiment Mode." };
@@ -186,11 +180,14 @@ export class ResearchCore {
       return this.acceptTerminalTool("research_set_enabled");
     }
     if (this.terminalToolAccepted) {
+      this.toolCallsThisTurn += 1;
       return {
         block: true,
-        reason: "Wait for the research lifecycle transition to finish before running a work tool.",
+        reason: "No work tool may run in the same batch after a research lifecycle transition.",
       };
     }
+
+    this.toolCallsThisTurn += 1;
     const normalizedTool = toolName.toLowerCase();
     if (
       (this.state.workMode === "brainstorming" || this.state.workMode === "exploration")
@@ -222,22 +219,7 @@ export class ResearchCore {
     }
 
     this.recordAction();
-    this.acceptWorkTool();
     return undefined;
-  }
-
-  finishToolCall(toolName: string): boolean {
-    let changed = false;
-    if (this.inFlightToolCount > 0) {
-      this.inFlightToolCount -= 1;
-      changed = true;
-    }
-    const researchTool = identifyResearchTool(toolName);
-    if (this.terminalToolAccepted && isLifecycleTool(researchTool)) {
-      this.terminalToolAccepted = false;
-      changed = true;
-    }
-    return changed;
   }
 
   projectStatus(): StatusProjection {
@@ -276,7 +258,6 @@ export class ResearchCore {
       checkpointReached: this.checkpointReached,
       checkpointResultCount: this.checkpointResultCount,
       toolCallsThisTurn: this.toolCallsThisTurn,
-      inFlightToolCount: this.inFlightToolCount,
       terminalToolAccepted: this.terminalToolAccepted,
       currentUserPrompt: this.currentUserPrompt,
     };
@@ -308,27 +289,20 @@ export class ResearchCore {
     this.checkpointReached = snapshot.checkpointReached === true;
     this.checkpointResultCount = nonNegativeInteger(snapshot.checkpointResultCount, 0);
     this.toolCallsThisTurn = nonNegativeInteger(snapshot.toolCallsThisTurn, 0);
-    this.inFlightToolCount = nonNegativeInteger(snapshot.inFlightToolCount, 0);
     this.terminalToolAccepted = snapshot.terminalToolAccepted === true;
     this.currentUserPrompt = typeof snapshot.currentUserPrompt === "string" ? snapshot.currentUserPrompt : "";
   }
 
   private acceptTerminalTool(toolName: string): ToolGateDecision | undefined {
-    if (this.inFlightToolCount > 0) {
+    if (this.toolCallsThisTurn > 0) {
       return {
         block: true,
-        reason: `${toolName} must wait for in-flight work tools to finish.`,
+        reason: `${toolName} must be the only tool in its batch.`,
       };
     }
     this.terminalToolAccepted = true;
     this.toolCallsThisTurn += 1;
-    this.inFlightToolCount += 1;
     return undefined;
-  }
-
-  private acceptWorkTool(): void {
-    this.toolCallsThisTurn += 1;
-    this.inFlightToolCount += 1;
   }
 
   private recordAction(): void {
@@ -372,13 +346,6 @@ function identifyResearchTool(toolName: string): string | undefined {
     "research_abort_experiment",
     "research_state",
   ].find((name) => toolName === name || toolName.endsWith(`__${name}`));
-}
-
-function isLifecycleTool(toolName: string | undefined): boolean {
-  return toolName === "research_set_enabled"
-    || toolName === "research_mode"
-    || toolName === "research_checkpoint"
-    || toolName === "research_abort_experiment";
 }
 
 function isShellTool(toolName: string): boolean {

@@ -44,46 +44,6 @@ try {
   await runHook({
     session_id: sessionId,
     cwd: project,
-    hook_event_name: "PreToolUse",
-    tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
-    tool_input: { mode: "exploration", objective: "Inspect the repository" },
-  });
-  const agentWhileTransitioning = await runHook({
-    session_id: sessionId,
-    cwd: project,
-    hook_event_name: "PreToolUse",
-    tool_name: "Agent",
-    tool_input: { subagent_type: "Explore" },
-  });
-  assert.equal(agentWhileTransitioning.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(agentWhileTransitioning.hookSpecificOutput.permissionDecisionReason, /transition to finish/);
-
-  await runHook({
-    session_id: sessionId,
-    cwd: project,
-    hook_event_name: "PostToolUse",
-    tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
-    tool_input: { mode: "exploration", objective: "Inspect the repository" },
-  }, false);
-  const agentAfterTransition = await runHook({
-    session_id: sessionId,
-    cwd: project,
-    hook_event_name: "PreToolUse",
-    tool_name: "Agent",
-    tool_input: { subagent_type: "Explore" },
-  });
-  assert.equal(agentAfterTransition.hookSpecificOutput.permissionDecision, undefined);
-  await runHook({
-    session_id: sessionId,
-    cwd: project,
-    hook_event_name: "PostToolUse",
-    tool_name: "Agent",
-    tool_input: { subagent_type: "Explore" },
-  }, false);
-
-  await runHook({
-    session_id: sessionId,
-    cwd: project,
     hook_event_name: "SessionEnd",
   }, false);
   assert.equal(await store.hasActiveState(), false);

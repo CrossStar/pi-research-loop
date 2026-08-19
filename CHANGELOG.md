@@ -2,14 +2,6 @@
 
 All notable changes to Research Loop are documented in this file.
 
-## 0.1.4 - 2026-08-20
-
-### Lifecycle fix
-
-- Clear the lifecycle transition fence as soon as its tool completes instead of holding it for the entire user turn.
-- Allow sequential Agent/subagent calls after a completed mode transition while still blocking truly concurrent work.
-- Track in-flight tools through `PostToolUse` and `PostToolUseFailure` hooks.
-
 ## 0.1.3 - 2026-08-19
 
 ### Changed
