@@ -34,12 +34,16 @@ research-loop/
 │   ├── checkpoint.ts     # Pi tool schema、preview 和 TUI render adapter
 │   └── artifacts.ts      # Pi Artifact Radar、preview 和 TUI integration
 ├── src/claude/
-│   ├── state-store.ts       # Claude hook/MCP/Status Line 共享状态
-│   ├── hook.ts              # Claude Code hook handler
+│   ├── state-store.ts       # Parent snapshot、subagent leases 和 append-only events
+│   ├── subagents.ts         # Dispatch、lease policy 和只读 tool gate
+│   ├── hook.ts              # Claude Code parent/subagent hook handler
 │   ├── mcp-server.ts        # Claude lifecycle MCP tools
 │   ├── statusline.ts        # 可组合的 Claude Status Line renderer
 │   ├── statusline-config.ts # 安装、恢复和已有 status line preservation
 │   └── statusline-cli.ts    # 本地 install/status/uninstall CLI
+├── agents/
+│   ├── research-explorer.md
+│   └── research-reviewer.md
 ├── skills/research-loop/SKILL.md
 ├── hooks/hooks.json
 └── .claude-plugin/
@@ -68,6 +72,19 @@ Mode 是同一主 session 的全局行为契约，不是四个 subagents。
 Experiment Mode 必须在进入时声明 title、question、intent 和 planned data scope。进入后不能
 通过普通 mode transition 离开，只能 checkpoint 或有效 abort。
 
+### Read-only Subagents
+
+`research-explorer` 和 `research-reviewer` 是 Plugin 自带的只读 workers；Claude 内置
+`Explore` 也作为 compatibility worker。它们获得 parent 当前 Work Mode 的不可变 lease，
+只允许 Read、Grep、Glob 及受控的只读查询。Subagent 不能调用 lifecycle MCP tools、修改
+文件、运行 shell/experiment 或继续 dispatch Agent。
+
+Work Mode 和 Experiment Context 始终由 parent session 持有。Agent dispatch 先写入独立的
+pending record，`SubagentStart` 或首个带 agent identity 的 tool hook 再将其绑定为 lease。
+`SubagentStop` 关闭 lease；只要存在 active 或 pending worker，parent lifecycle transition
+就会被拒绝。Subagent artifacts 使用唯一 event 文件汇入 parent，避免并行 worker 覆盖同一
+snapshot。
+
 ### Hooks
 
 `hooks/hooks.json` 注册：
@@ -75,8 +92,11 @@ Experiment Mode 必须在进入时声明 title、question、intent 和 planned d
 - `SessionStart`：初始化 session state，并注入 Plugin 状态；
 - `SessionEnd`：将 snapshot 标记为 inactive，避免无 Plugin session 显示过期状态；
 - `UserPromptSubmit`：记录当前用户请求、重置 round counters，并注入最新 policy；
-- `PreToolUse`：加载权威状态、运行共享 Governor、拒绝违规调用，并再次注入 policy；
-- `PostToolUse`：为 Write/Edit 类工具产生的受支持文件记录 artifact metadata。
+- `PreToolUse`：区分 parent/subagent、运行 Governor 或 lease gate，并再次注入 policy；
+- `PostToolUse`：记录 artifacts，并清理已完成 Agent dispatch；
+- `PostToolUseFailure`：清理失败的 Agent dispatch；
+- `SubagentStart`：绑定 dispatch、注入只读 lease；
+- `SubagentStop`：关闭 lease，使 parent lifecycle 可以继续。
 
 Governor 因此不只存在于 prompt 中。Brainstorming 和 Exploration 的写入会被实际拒绝；
 这些 read-oriented mode 中检测到的 empirical shell command 也会被拒绝。Experiment 的
@@ -119,6 +139,7 @@ Status Line 从共享 `ResearchCoreSnapshot` 读取，并以 Terminal Rail 形�
   ╰─ ◇ research  brainstorming  ·  read only
   ╰─ ◇ research  exploration  ·  blueprint
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
+  ╰─ ◇ research  exploration  ·  blueprint  ·  2 agents
   ╰─ ◆ research  checkpoint  ·  2 results
 ```
 
@@ -128,21 +149,25 @@ OFF 状态保留低对比度提示；Experiment 和 Checkpoint 使用实心标�
 
 ## 状态持久化
 
-Hook 和 MCP server 是独立进程，不能依赖单个 JavaScript 进程内存。Claude adapter 将
-`ResearchCoreSnapshot` 写入操作系统临时目录：
+Hook 和 MCP server 是独立进程，不能依赖单个 JavaScript 进程内存。Claude adapter 使用
+project-keyed 目录，并把 parent、dispatch、lease 和 events 分开：
 
 ```text
-$TMP/research-loop/<project-path-hash>/state.json
+$TMP/research-loop/<project-path-hash>/
+├── state.json
+├── dispatches/<dispatch-hash>.json
+├── agents/<agent-hash>.json
+└── events/<timestamp>-<uuid>.json
 ```
 
-状态包含 session id、Work Mode、Experiment Context、artifacts、action counters、当前用户
-请求和 terminal transition 信息。相同 session id 的 resume 会恢复状态；新 session 会从
-Research Loop OFF 开始。
+`state.json` 只由 parent session 持有，包含 Work Mode、Experiment Context、artifacts、action
+counters 和 lifecycle transition。每个 pending dispatch 和 active lease 使用独立文件；并行
+Subagents 通过 append-only artifact events 交付 metadata。lease claim 使用原子 lock directory，
+避免两个并行 worker 领取同一个 dispatch。相同 parent session id 的 resume 会恢复状态；新
+parent session 会从 Research Loop OFF 开始并清理旧 leases。
 
-第一版使用项目级 active state 文件，因此同一项目内同时运行多个 Claude Code sessions
-可能互相覆盖 active session。后续可在 Claude MCP transport 提供稳定 session identity 后
-改为完整的 per-session routing；在此之前，同一 worktree 建议只运行一个启用 Research
-Loop 的 Claude session。
+同一 worktree 的多个独立 parent Claude sessions 仍共享 project owner，因此暂不支持同时启用；
+同一 parent 下的多个只读 Subagents 则是本阶段明确支持的并发模型。
 
 ## Marketplace 安装
 
@@ -189,7 +214,9 @@ claude plugin validate --strict .claude-plugin/marketplace.json
 
 1. Core mode、Governor 和 checkpoint lifecycle smoke test；
 2. Hook session、policy injection 和 PreToolUse denial smoke test；
-3. 通过官方 MCP SDK client 启动 bundled server，完成 enable → Experiment → checkpoint
+3. Subagent dispatch、lease、只读 gate、lifecycle ownership、并发 artifact events 和 cleanup
+   smoke test；
+4. 通过官方 MCP SDK client 启动 bundled server，完成 enable → Experiment → checkpoint
    → Normal，并验证 Status Line install、state rendering、已有 command composition 和
    uninstall restore。
 

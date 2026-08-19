@@ -43,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.1.3" });
+const client = new Client({ name: "research-loop-smoke", version: "0.2.0-dev.0" });
 
 try {
   await client.connect(transport);
@@ -64,6 +64,21 @@ try {
   });
   assert.equal(enabled.isError, undefined);
 
+  await runHook({
+    session_id: "mcp-smoke-session",
+    cwd: project,
+    hook_event_name: "UserPromptSubmit",
+    prompt: "Enter Experiment Mode, then delegate a read-only review.",
+  });
+  await runHook({
+    session_id: "mcp-smoke-session",
+    cwd: project,
+    hook_event_name: "PreToolUse",
+    tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
+    tool_use_id: "mcp-mode-transition",
+    tool_input: { mode: "experiment" },
+  });
+
   const entered = await client.callTool({
     name: "research_mode",
     arguments: {
@@ -76,6 +91,27 @@ try {
     },
   });
   assert.equal(entered.isError, undefined);
+  const agentAfterTransition = await runHook({
+    session_id: "mcp-smoke-session",
+    cwd: project,
+    hook_event_name: "PreToolUse",
+    tool_name: "Agent",
+    tool_use_id: "mcp-review-dispatch",
+    tool_input: {
+      subagent_type: "research-reviewer",
+      description: "Review experiment scope",
+      prompt: "Review the declared scope without modifying files.",
+    },
+  });
+  assert.equal(agentAfterTransition.hookSpecificOutput.permissionDecision, undefined);
+  await runHook({
+    session_id: "mcp-smoke-session",
+    cwd: project,
+    hook_event_name: "PostToolUseFailure",
+    tool_name: "Agent",
+    tool_use_id: "mcp-review-dispatch",
+    tool_input: {},
+  }, false);
 
   const statusLineInstall = await client.callTool({
     name: "research_configure_statusline",
@@ -93,7 +129,7 @@ try {
   assert.match(statusLineText, /BASE/);
   assert.match(statusLineText, /◆ research  experiment/);
   assert.match(statusLineText, /diagnostic/);
-  assert.match(statusLineText, /0 actions/);
+  assert.match(statusLineText, /1 action/);
   assert.match(statusLineText, /0 outputs/);
   const styledStatusLineText = await runStatusLine(
     join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
@@ -168,6 +204,25 @@ try {
 } finally {
   await client.close();
   await rm(project, { recursive: true, force: true });
+}
+
+async function runHook(input, expectsOutput = true) {
+  const child = spawn(process.execPath, [resolve("dist/claude/hook.js")], {
+    env: { ...process.env, RESEARCH_LOOP_CLAUDE_HOME: claudeHome },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.end(JSON.stringify(input));
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const code = await new Promise((resolveCode) => child.on("close", resolveCode));
+  assert.equal(code, 0, stderr);
+  if (!expectsOutput) {
+    assert.equal(stdout, "");
+    return undefined;
+  }
+  return JSON.parse(stdout);
 }
 
 async function runStatusLine(scriptPath, projectDirectory, noColor = true) {

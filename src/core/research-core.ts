@@ -57,6 +57,10 @@ export class ResearchCore {
     return this.state.workMode;
   }
 
+  get lifecycleTransitionPending(): boolean {
+    return this.terminalToolAccepted;
+  }
+
   get experiment(): ExperimentContext | undefined {
     return this.state.experiment ? { ...this.state.experiment } : undefined;
   }
@@ -150,6 +154,10 @@ export class ResearchCore {
     this.softReviewRaisedThisTurn = false;
   }
 
+  completeLifecycleTransition(): void {
+    this.terminalToolAccepted = false;
+  }
+
   evaluateToolCall(toolName: string, input: unknown): ToolGateDecision | undefined {
     if (!this.state.enabled) return undefined;
 
@@ -180,10 +188,9 @@ export class ResearchCore {
       return this.acceptTerminalTool("research_set_enabled");
     }
     if (this.terminalToolAccepted) {
-      this.toolCallsThisTurn += 1;
       return {
         block: true,
-        reason: "No work tool may run in the same batch after a research lifecycle transition.",
+        reason: "Wait for the research lifecycle transition to complete before running work or dispatching a subagent.",
       };
     }
 
@@ -294,10 +301,10 @@ export class ResearchCore {
   }
 
   private acceptTerminalTool(toolName: string): ToolGateDecision | undefined {
-    if (this.toolCallsThisTurn > 0) {
+    if (this.terminalToolAccepted) {
       return {
         block: true,
-        reason: `${toolName} must be the only tool in its batch.`,
+        reason: `${toolName} cannot start while another research lifecycle transition is pending.`,
       };
     }
     this.terminalToolAccepted = true;

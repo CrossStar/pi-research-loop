@@ -10,6 +10,7 @@ import {
   type CheckpointDetails,
   type PortableCheckpointResult,
 } from "../core/checkpoint.js";
+import type { ResearchCore } from "../core/research-core.js";
 import type { ExperimentContext } from "../core/types.js";
 import { ClaudeStateStore } from "./state-store.js";
 import {
@@ -19,7 +20,7 @@ import {
   uninstallClaudeStatusLine,
 } from "./statusline-config.js";
 
-const VERSION = "0.1.3";
+const VERSION = "0.2.0-dev.0";
 const store = new ClaudeStateStore();
 const server = new McpServer({ name: "research-loop", version: VERSION });
 
@@ -104,14 +105,18 @@ server.registerTool(
   },
   async ({ enabled }) => {
     const core = await store.loadCore();
+    const activeAgentError = await activeSubagentError();
+    if (activeAgentError) return finishLifecycle(core, errorResult(activeAgentError));
     if (!enabled && core.workMode === "experiment") {
-      return errorResult(
+      return finishLifecycle(core, errorResult(
         "Experiment Mode must end with research_checkpoint or research_abort_experiment before disabling Research Loop.",
-      );
+      ));
     }
     core.setEnabled(enabled);
-    await store.saveCore(core);
-    return textResult(`${core.projectStatus().text}\n\n${core.policy() ?? "Research policy injection is disabled."}`);
+    return finishLifecycle(
+      core,
+      textResult(`${core.projectStatus().text}\n\n${core.policy() ?? "Research policy injection is disabled."}`),
+    );
   },
 );
 
@@ -133,16 +138,19 @@ server.registerTool(
   },
   async (input) => {
     const core = await store.loadCore();
+    const activeAgentError = await activeSubagentError();
+    if (activeAgentError) return finishLifecycle(core, errorResult(activeAgentError));
     const experiment = experimentFromModeInput(input);
     if (input.mode === "experiment" && !experiment) {
-      return errorResult(
+      return finishLifecycle(core, errorResult(
         "Experiment Mode requires title, question, intent, and plannedDataScope before empirical execution.",
-      );
+      ));
     }
     const decision = core.enterMode(input.mode, input.objective, experiment);
-    if (decision.block) return errorResult(decision.reason ?? "Mode transition rejected.");
-    await store.saveCore(core);
-    return textResult(`${core.projectStatus().text}\n\n${core.policy() ?? ""}`);
+    if (decision.block) {
+      return finishLifecycle(core, errorResult(decision.reason ?? "Mode transition rejected."));
+    }
+    return finishLifecycle(core, textResult(`${core.projectStatus().text}\n\n${core.policy() ?? ""}`));
   },
 );
 
@@ -156,8 +164,10 @@ server.registerTool(
   },
   async () => {
     const core = await store.loadCore();
+    const activeSubagents = await store.activeSubagentCount();
     return textResult([
       core.projectStatus().text,
+      `Active Research Subagents: ${activeSubagents}`,
       JSON.stringify(core.researchState, null, 2),
       core.policy() ?? "Research policy injection is disabled.",
     ].join("\n\n"));
@@ -209,10 +219,11 @@ server.registerTool(
   },
   async ({ reason }) => {
     const core = await store.loadCore();
+    const activeAgentError = await activeSubagentError();
+    if (activeAgentError) return finishLifecycle(core, errorResult(activeAgentError));
     const decision = core.abortExperiment();
-    if (decision.block) return errorResult(decision.reason ?? "Abort rejected.");
-    await store.saveCore(core);
-    return textResult(`Experiment aborted: ${reason}\n\n${core.projectStatus().text}`);
+    if (decision.block) return finishLifecycle(core, errorResult(decision.reason ?? "Abort rejected."));
+    return finishLifecycle(core, textResult(`Experiment aborted: ${reason}\n\n${core.projectStatus().text}`));
   },
 );
 
@@ -236,8 +247,10 @@ server.registerTool(
   },
   async (input) => {
     const core = await store.loadCore();
+    const activeAgentError = await activeSubagentError();
+    if (activeAgentError) return finishLifecycle(core, errorResult(activeAgentError));
     if (core.workMode !== "experiment") {
-      return errorResult("research_checkpoint is available only in Experiment Mode.");
+      return finishLifecycle(core, errorResult("research_checkpoint is available only in Experiment Mode."));
     }
 
     const results: PortableCheckpointResult[] = [];
@@ -260,16 +273,30 @@ server.registerTool(
       results,
     };
     const validation = validateCheckpoint(details);
-    if (!validation.valid) return errorResult(validation.errors.join("\n"));
+    if (!validation.valid) {
+      return finishLifecycle(core, errorResult(validation.errors.join("\n")));
+    }
 
     core.reachCheckpoint(results.length);
-    await store.saveCore(core);
     const warnings = validation.warnings.length > 0
       ? `\n\n## Protocol Warnings\n\n${validation.warnings.map((warning) => `- ${warning}`).join("\n")}`
       : "";
-    return textResult(`${formatCheckpointReport(details)}${warnings}`);
+    return finishLifecycle(core, textResult(`${formatCheckpointReport(details)}${warnings}`));
   },
 );
+
+async function activeSubagentError(): Promise<string | undefined> {
+  const count = await store.activeSubagentCount();
+  return count > 0
+    ? `Wait for ${count} active Research Subagent${count === 1 ? "" : "s"} to finish before changing the parent lifecycle.`
+    : undefined;
+}
+
+async function finishLifecycle<T>(core: ResearchCore, result: T): Promise<T> {
+  core.completeLifecycleTransition();
+  await store.saveCore(core);
+  return result;
+}
 
 function experimentFromModeInput(input: {
   mode: z.infer<typeof modeSchema>;

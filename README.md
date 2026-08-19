@@ -102,6 +102,19 @@ claude plugin marketplace remove research-loop
 `skills/research-loop/SKILL.md` 是用户入口和 Research Policy 使用说明。四种 Work Mode
 始终是同一个主 session 的全局行为契约，不会被简单映射成四个 subagents。
 
+### Read-only Subagents
+
+Plugin 提供两个可选的 parent-owned workers：
+
+| Agent | 用途 | 工具 |
+| --- | --- | --- |
+| `research-explorer` | 协议提取、执行路径和实现事实 | Read、Grep、Glob |
+| `research-reviewer` | fidelity、evidence、source conflict 和 claim review | Read、Grep、Glob |
+
+Claude 内置 `Explore` Agent 也可以作为只读 compatibility worker。Subagent 获取当前 Work Mode
+的不可变 lease，但不能切换模式、启停 Research Loop、提交 Checkpoint、运行实验或继续派生
+Agent。主 Agent 在所有 active Subagents 结束前不能执行 lifecycle transition。
+
 ### MCP tools
 
 ```text
@@ -129,8 +142,11 @@ research_abort_experiment
 | `SessionStart` | 初始化或恢复 Research State，并注入当前状态 |
 | `SessionEnd` | 将 snapshot 标记为 inactive，避免显示过期状态 |
 | `UserPromptSubmit` | 记录用户请求、重置 round counters 并注入 Policy |
-| `PreToolUse` | 执行 Governor、fidelity guard 和 lifecycle gate |
-| `PostToolUse` | 为受支持的 Write/Edit 输出记录 artifact metadata |
+| `PreToolUse` | 执行 Governor、fidelity guard、lease 和 lifecycle gate |
+| `PostToolUse` | 记录 parent/subagent artifact metadata，并回收未启动的 dispatch |
+| `PostToolUseFailure` | 回收失败的 Agent dispatch |
+| `SubagentStart` | 将 pending dispatch 绑定到 agent id 并注入只读 lease |
+| `SubagentStop` | 关闭 lease，使 parent lifecycle 可以继续 |
 
 ### Status Line
 
@@ -143,6 +159,7 @@ Status Line：
   ╰─ ◇ research  brainstorming  ·  read only
   ╰─ ◇ research  exploration  ·  blueprint
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
+  ╰─ ◇ research  exploration  ·  blueprint  ·  2 agents
   ╰─ ◆ research  checkpoint  ·  2 results
 ```
 

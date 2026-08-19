@@ -1,7 +1,7 @@
 ---
 name: research-loop
 description: This skill should be used when the user asks to "start a research loop", "enable research mode", "show research status", "configure the research status line", "brainstorm research directions", "understand experiment code", "run an experiment", "reproduce a paper result", or requests evidence-first empirical investigation with checkpoints.
-version: 0.1.3
+version: 0.2.0-dev.0
 ---
 
 # Research Loop
@@ -29,8 +29,8 @@ Code. Installation preserves an existing command-based Claude status line and re
 on an additional line. Use `action: "uninstall"` to restore the previous status-line setting.
 
 Treat the status line as the primary visible projection of Research State. It displays enabled state,
-Work Mode, action count, Soft Review, artifact count, and active Experiment intent and title. Keep the
-MCP state authoritative when display and lifecycle decisions differ.
+Work Mode, action count, Soft Review, artifact count, and active Experiment intent. Keep the MCP state
+authoritative when display and lifecycle decisions differ.
 
 ## Select the Work Mode
 
@@ -71,6 +71,26 @@ Declare `title`, `question`, `intent`, `plannedDataScope`, and any `reference` i
 call. For reproduction, triangulate the official paper including appendix or supplement, repository
 README at the relevant revision, and relevant open and closed issues before execution. Disclose source
 conflicts and obtain approval for protocol deviations.
+
+## Delegate to Research Subagents
+
+Use `Explore`, `research-explorer`, or `research-reviewer` only for bounded read-only delegation. The
+main session remains the sole owner of Research State, Work Mode, Experiment lifecycle, and
+Checkpoint decisions. Work Modes are never mapped to separate agents.
+
+- Use `research-explorer` for protocol extraction, execution-path mapping, and implementation facts.
+- Use `research-reviewer` for fidelity review, evidence quality, source conflicts, and claim limits.
+- Built-in `Explore` is accepted as a read-only compatibility agent.
+- Give each subagent one explicit objective and require repository-relative citations.
+- Do not ask a Research Subagent to edit, run shell commands or experiments, dispatch another agent,
+  or call lifecycle MCP tools.
+- Wait for all active Research Subagents to finish before changing mode, disabling Research Loop,
+  aborting an experiment, or submitting a checkpoint.
+- Treat subagent findings and artifact metadata as inputs for parent curation, never as an automatic
+  checkpoint or scientific conclusion.
+
+Read-only reviewers may assist during Experiment Mode, but empirical experiment runners are outside
+the initial Subagent scope.
 
 Keep diagnostic runs separate from reproduction evidence. Preserve dataset, split, sampling,
 preprocessing, model or checkpoint, objective, evaluation, seeds, repeats, and material
