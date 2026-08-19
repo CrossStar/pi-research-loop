@@ -111,17 +111,18 @@ npm run statusline:uninstall
 显式卸载会写入 opt-out marker，防止下一次 `SessionStart` 自动重装。重新执行 install 会
 清除 marker。安装、迁移和卸载后都需要重启 Claude Code。
 
-Status Line 从共享 `ResearchCoreSnapshot` 读取：
+Status Line 从共享 `ResearchCoreSnapshot` 读取。Research Loop 关闭时不会追加空闲状态行；
+启用后使用紧凑的 Powerline-style pill：
 
 ```text
-RESEARCH OFF
-RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
-RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3 | PHASE REPRODUCTION · Baseline reproduction
-RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
+◈ Research · Normal · 2A · 0O
+◈ Research · Experiment · Reproduction · 6A · 3O · Review
+◈ Research · Checkpoint · 2 results
 ```
 
 renderer 不调用模型或 MCP，不写 Research State，并在错误时 fail-open。没有 active Plugin
-session state 的项目不会追加 Research Loop 行。
+session state 或 Research Loop 处于 OFF 的项目不会追加 Research Loop 行。`NO_COLOR` 环境
+下会自动使用无 ANSI 的纯文本版本。
 
 ## 状态持久化
 

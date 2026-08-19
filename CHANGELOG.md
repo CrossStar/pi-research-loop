@@ -2,6 +2,14 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.1.2 - 2026-08-19
+
+### Changed
+
+- Hide the Research Loop row while the governor is disabled.
+- Replace the verbose uppercase status text with a compact Powerline-style pill.
+- Shorten action and output counters and remove experiment-title noise from the status line.
+
 ## 0.1.1 - 2026-08-19
 
 ### Fixed

@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ResearchCoreSnapshot } from "../core/research-core.js";
+import type { WorkMode } from "../core/types.js";
 import { ClaudeStateStore } from "./state-store.js";
 
 interface StatusLineInput {
@@ -17,6 +19,23 @@ interface StatusLineConfig {
   schemaVersion: 1;
   baseCommand?: string;
 }
+
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+const COLORS = {
+  background: { r: 30, g: 32, b: 48 },
+  text: { r: 192, g: 202, b: 245 },
+  muted: { r: 125, g: 135, b: 170 },
+  normal: { r: 130, g: 170, b: 255 },
+  brainstorming: { r: 252, g: 167, b: 234 },
+  exploration: { r: 125, g: 207, b: 255 },
+  success: { r: 195, g: 232, b: 141 },
+  warning: { r: 224, g: 175, b: 104 },
+} satisfies Record<string, Rgb>;
 
 async function main(): Promise<void> {
   const rawInput = await readStdin();
@@ -36,23 +55,67 @@ async function main(): Promise<void> {
 async function formatResearchStatus(store: ClaudeStateStore): Promise<string> {
   if (!await store.hasActiveState()) return "";
   const core = await store.loadCore();
-  const status = core.projectStatus();
-  const experiment = core.experiment;
-  const phase = experiment
-    ? ` | PHASE ${experiment.intent.toUpperCase()} · ${truncate(experiment.title, 32)}`
-    : "";
-  return colorize(`${status.text}${phase}`, status.tone);
+  if (!core.enabled) return "";
+
+  const snapshot = core.snapshot();
+  const items = statusItems(snapshot);
+  if (process.env.NO_COLOR || process.env.TERM === "dumb") {
+    return `Research · ${items.join(" · ")}`;
+  }
+  return powerlinePill(items, statusAccent(snapshot));
 }
 
-function colorize(text: string, tone: "dim" | "success" | "warning" | "accent"): string {
-  if (process.env.NO_COLOR) return text;
-  const color = {
-    dim: "\u001b[2m",
-    success: "\u001b[32m",
-    warning: "\u001b[33m",
-    accent: "\u001b[36m",
-  }[tone];
-  return `${color}${text}\u001b[0m`;
+function statusItems(snapshot: ResearchCoreSnapshot): string[] {
+  if (snapshot.checkpointReached) {
+    return ["Checkpoint", `${snapshot.checkpointResultCount} results`];
+  }
+
+  const items = [displayMode(snapshot.state.workMode)];
+  if (snapshot.state.experiment) items.push(displayIntent(snapshot.state.experiment.intent));
+  items.push(`${snapshot.roundActions}A`, `${snapshot.state.artifacts.length}O`);
+  if (snapshot.softReviewPending) items.push("Review");
+  return items;
+}
+
+function statusAccent(snapshot: ResearchCoreSnapshot): Rgb {
+  if (snapshot.softReviewPending) return COLORS.warning;
+  if (snapshot.checkpointReached || snapshot.state.workMode === "experiment") return COLORS.success;
+  return COLORS[snapshot.state.workMode];
+}
+
+function powerlinePill(items: string[], accent: Rgb): string {
+  const separator = `${foreground(COLORS.muted)} · `;
+  const details = items.map((item) => `${foreground(COLORS.text)}${item}`).join(separator);
+  return [
+    foreground(COLORS.background),
+    "",
+    background(COLORS.background),
+    foreground(accent),
+    " ◈ Research ",
+    separator,
+    details,
+    " ",
+    "\u001b[0m",
+    foreground(COLORS.background),
+    "",
+    "\u001b[0m",
+  ].join("");
+}
+
+function foreground(color: Rgb): string {
+  return `\u001b[38;2;${color.r};${color.g};${color.b}m`;
+}
+
+function background(color: Rgb): string {
+  return `\u001b[48;2;${color.r};${color.g};${color.b}m`;
+}
+
+function displayMode(mode: WorkMode): string {
+  return mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
+function displayIntent(intent: string): string {
+  return intent.charAt(0).toUpperCase() + intent.slice(1).replace(/-/g, " ");
 }
 
 function runBaseStatusLine(command: string, input: string): string {
@@ -95,10 +158,6 @@ async function readStdin(): Promise<string> {
   let input = "";
   for await (const chunk of process.stdin) input += chunk.toString();
   return input;
-}
-
-function truncate(value: string, limit: number): string {
-  return value.length <= limit ? value : `${value.slice(0, Math.max(1, limit - 1))}…`;
 }
 
 main().catch(() => {

@@ -1,7 +1,7 @@
 ---
 name: research-loop
 description: This skill should be used when the user asks to "start a research loop", "enable research mode", "show research status", "configure the research status line", "brainstorm research directions", "understand experiment code", "run an experiment", "reproduce a paper result", or requests evidence-first empirical investigation with checkpoints.
-version: 0.1.1
+version: 0.1.2
 ---
 
 # Research Loop
