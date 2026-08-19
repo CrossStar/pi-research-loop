@@ -19,7 +19,7 @@ import {
   uninstallClaudeStatusLine,
 } from "./statusline-config.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const store = new ClaudeStateStore();
 const server = new McpServer({ name: "research-loop", version: VERSION });
 

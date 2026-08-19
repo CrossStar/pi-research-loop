@@ -15,6 +15,7 @@ try {
     hook_event_name: "SessionStart",
   });
   assert.match(started.hookSpecificOutput.additionalContext, /RESEARCH LOOP \| OFF/);
+  assert.match(started.systemMessage, /Status Line was installed or migrated/);
 
   const store = new ClaudeStateStore(project);
   const core = await store.loadCore();
@@ -54,6 +55,7 @@ try {
 
 async function runHook(input, expectsOutput = true) {
   const child = spawn(process.execPath, [resolve("dist/claude/hook.js")], {
+    env: { ...process.env, RESEARCH_LOOP_CLAUDE_HOME: join(project, "claude-home") },
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stdin.end(JSON.stringify(input));

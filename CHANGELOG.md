@@ -2,6 +2,14 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.1.1 - 2026-08-19
+
+### Fixed
+
+- Automatically install the Research Loop Status Line on the first Plugin session.
+- Migrate the pre-rename `pi-research-loop` Status Line without losing the user's previous command.
+- Preserve an explicit Status Line uninstall through a user opt-out marker.
+
 ## 0.1.0 - 2026-08-19
 
 ### Added

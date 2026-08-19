@@ -8,10 +8,28 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const project = await mkdtemp(join(tmpdir(), "research-loop-mcp-"));
 const claudeHome = join(project, "claude-home");
-await mkdir(claudeHome, { recursive: true });
+const legacyStatusLineDirectory = join(claudeHome, "pi-research-loop");
+await mkdir(legacyStatusLineDirectory, { recursive: true });
+await writeFile(
+  join(legacyStatusLineDirectory, "statusline-config.json"),
+  `${JSON.stringify({
+    schemaVersion: 1,
+    hadPreviousStatusLine: true,
+    previousStatusLine: { type: "command", command: "echo BASE", padding: 1 },
+    baseCommand: "echo BASE",
+    installedAt: "2026-01-01T00:00:00.000Z",
+  }, null, 2)}\n`,
+  "utf8",
+);
 await writeFile(
   join(claudeHome, "settings.json"),
-  `${JSON.stringify({ statusLine: { type: "command", command: "echo BASE", padding: 1 } }, null, 2)}\n`,
+  `${JSON.stringify({
+    statusLine: {
+      type: "command",
+      command: `node "${join(legacyStatusLineDirectory, "statusline.mjs").replace(/\\/g, "/")}"`,
+      padding: 0,
+    },
+  }, null, 2)}\n`,
   "utf8",
 );
 const environment = Object.fromEntries(
@@ -25,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.1.0" });
+const client = new Client({ name: "research-loop-smoke", version: "0.1.1" });
 
 try {
   await client.connect(transport);
@@ -67,6 +85,7 @@ try {
   const settingsPath = join(environment.RESEARCH_LOOP_CLAUDE_HOME, "settings.json");
   const settings = JSON.parse(await readFile(settingsPath, "utf8"));
   assert.match(settings.statusLine.command, /research-loop\/statusline\.mjs/);
+  await assert.rejects(readFile(join(legacyStatusLineDirectory, "statusline-config.json"), "utf8"));
   const statusLineText = await runStatusLine(
     join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
     project,
@@ -115,6 +134,10 @@ try {
   const restoredSettings = JSON.parse(await readFile(settingsPath, "utf8"));
   assert.equal(restoredSettings.statusLine.command, "echo BASE");
   assert.equal(restoredSettings.statusLine.padding, 1);
+  assert.match(
+    await readFile(join(claudeHome, "research-loop-statusline.disabled"), "utf8"),
+    /Disabled by user/,
+  );
 
   console.log("MCP smoke test passed");
 } finally {

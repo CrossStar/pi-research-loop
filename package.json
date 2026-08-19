@@ -1,6 +1,6 @@
 {
   "name": "research-loop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An evidence-first research loop for Pi and Claude Code",
   "type": "module",
   "private": true,

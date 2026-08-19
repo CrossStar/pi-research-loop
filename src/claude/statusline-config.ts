@@ -23,6 +23,12 @@ export interface StatusLineConfigurationStatus {
   preservesPreviousStatusLine: boolean;
 }
 
+export interface StatusLineEnsureResult {
+  changed: boolean;
+  disabledByUser: boolean;
+  status: StatusLineConfigurationStatus;
+}
+
 export function claudePluginRoot(moduleUrl: string): string {
   return resolve(dirname(fileURLToPath(moduleUrl)), "../..");
 }
@@ -31,12 +37,13 @@ export async function installClaudeStatusLine(pluginRoot: string): Promise<Statu
   const paths = statusLinePaths();
   const settings = await readSettings(paths.settingsPath);
   const currentIsOurs = isOurStatusLine(settings.statusLine, paths.command);
-  const previousConfig = await readInstalledConfig(paths.configPath);
+  const currentConfig = await readInstalledConfig(paths.configPath);
+  const previousConfig = currentConfig ?? await readInstalledConfig(paths.legacyConfigPath);
   const hadPreviousStatusLine = currentIsOurs
     ? previousConfig?.hadPreviousStatusLine ?? false
     : Object.prototype.hasOwnProperty.call(settings, "statusLine");
   const previousStatusLine = currentIsOurs ? previousConfig?.previousStatusLine : settings.statusLine;
-  const baseCommand = commandFromStatusLine(previousStatusLine);
+  const baseCommand = previousConfig?.baseCommand ?? commandFromStatusLine(previousStatusLine);
 
   await mkdir(paths.installDirectory, { recursive: true });
   await copyFile(join(pluginRoot, "dist", "claude", "statusline.js"), paths.scriptPath);
@@ -54,19 +61,40 @@ export async function installClaudeStatusLine(pluginRoot: string): Promise<Statu
     padding: statusLinePadding(previousStatusLine),
   };
   await writeJsonAtomic(paths.settingsPath, settings);
+  await rm(paths.disabledPath, { force: true });
+  if (paths.legacyInstallDirectory !== paths.installDirectory) {
+    await rm(paths.legacyInstallDirectory, { recursive: true, force: true });
+  }
   return getClaudeStatusLineStatus();
+}
+
+export async function ensureClaudeStatusLine(pluginRoot: string): Promise<StatusLineEnsureResult> {
+  const paths = statusLinePaths();
+  const status = await getClaudeStatusLineStatus();
+  if (status.installed) return { changed: false, disabledByUser: false, status };
+  if (await fileExists(paths.disabledPath)) {
+    return { changed: false, disabledByUser: true, status };
+  }
+  return {
+    changed: true,
+    disabledByUser: false,
+    status: await installClaudeStatusLine(pluginRoot),
+  };
 }
 
 export async function uninstallClaudeStatusLine(): Promise<StatusLineConfigurationStatus> {
   const paths = statusLinePaths();
   const settings = await readSettings(paths.settingsPath);
-  const config = await readInstalledConfig(paths.configPath);
+  const config = await readInstalledConfig(paths.configPath)
+    ?? await readInstalledConfig(paths.legacyConfigPath);
   if (isOurStatusLine(settings.statusLine, paths.command)) {
     if (config?.hadPreviousStatusLine) settings.statusLine = config.previousStatusLine;
     else delete settings.statusLine;
     await writeJsonAtomic(paths.settingsPath, settings);
   }
   await rm(paths.installDirectory, { recursive: true, force: true });
+  await rm(paths.legacyInstallDirectory, { recursive: true, force: true });
+  await writeFile(paths.disabledPath, "Disabled by user. Run statusline install to enable again.\n", "utf8");
   return getClaudeStatusLineStatus();
 }
 
@@ -88,14 +116,20 @@ function statusLinePaths() {
     ? resolve(process.env.RESEARCH_LOOP_CLAUDE_HOME)
     : join(homedir(), ".claude");
   const installDirectory = join(claudeHome, "research-loop");
+  const legacyInstallDirectory = join(claudeHome, "pi-research-loop");
   const scriptPath = join(installDirectory, "statusline.mjs");
   const configPath = join(installDirectory, "statusline-config.json");
+  const legacyConfigPath = join(legacyInstallDirectory, "statusline-config.json");
+  const disabledPath = join(claudeHome, "research-loop-statusline.disabled");
   const settingsPath = join(claudeHome, "settings.json");
   const portableScriptPath = scriptPath.replace(/\\/g, "/");
   return {
     installDirectory,
+    legacyInstallDirectory,
     scriptPath,
     configPath,
+    legacyConfigPath,
+    disabledPath,
     settingsPath,
     command: `node "${portableScriptPath}"`,
   };
@@ -141,7 +175,7 @@ function isOurStatusLine(statusLine: unknown, command: string): boolean {
   const configured = commandFromStatusLine(statusLine);
   if (configured === command) return true;
   return typeof configured === "string"
-    && /research-loop[\\/]statusline\.(?:mjs|js)["']?\s*$/.test(configured.replace(/\\\\/g, "/"));
+    && /(?:pi-)?research-loop[\\/]statusline\.(?:mjs|js)["']?\s*$/.test(configured.replace(/\\\\/g, "/"));
 }
 
 async function writeJsonAtomic(path: string, value: unknown): Promise<void> {

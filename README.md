@@ -50,26 +50,20 @@ claude plugin marketplace add CrossStar/research-loop
 claude plugin install research-loop@research-loop
 ```
 
-安装完成后重启 Claude Code。
+### 3. 首次启动并激活 Status Line
 
-### 3. 安装 Status Line
-
-进入 Claude Code 后输入：
+安装完成后启动 Claude Code。`SessionStart` Hook 会自动安装或迁移 Research Loop
+Status Line，并保留已有的 command-based Status Line。首次启动会提示：
 
 ```text
-请安装 Research Loop Status Line。
+Research Loop Status Line was installed or migrated. Restart Claude Code once to display it.
 ```
 
-Claude 会调用：
+看到提示后再重启一次 Claude Code，状态栏即可显示。Claude Code 在 Plugin Hook 执行前已经
+读取完本轮 settings，因此首次安装后的一次额外重启无法省略。
 
-```json
-{
-  "action": "install"
-}
-```
-
-对应 MCP tool 为 `research_configure_statusline`。安装器会保留已有的 command-based
-Status Line，并将 Research Loop 状态追加为独立一行。完成后再次重启 Claude Code。
+如果自动安装失败，也可以输入“请安装 Research Loop Status Line”，让 Claude 调用
+`research_configure_statusline` 的 `install` action。
 
 ### 4. 启用 Research Loop
 
@@ -343,8 +337,8 @@ npm run build:claude
   project path 为主。
 - Claude Artifact metadata 目前优先覆盖 Write/Edit 输出；Bash 生成文件的完整增量扫描仍在
  后续计划中。
-- Claude Code Plugin manifest 尚不支持原生注册 Status Line，因此首次安装需要显式运行
-  Status Line installer。
+- Claude Code Plugin manifest 尚不支持原生注册 Status Line，因此首次 `SessionStart` 会
+  自动安装 renderer，但需要再重启一次 Claude Code 才能显示。
 
 ## 仓库
 

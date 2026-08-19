@@ -1,5 +1,6 @@
 import { resolveArtifactMetadata } from "../core/artifacts.js";
 import { ClaudeStateStore } from "./state-store.js";
+import { claudePluginRoot, ensureClaudeStatusLine } from "./statusline-config.js";
 
 interface HookInput {
   session_id?: string;
@@ -19,7 +20,9 @@ async function main(): Promise<void> {
 
   if (event === "SessionStart") {
     const core = await store.beginSession(input.session_id ?? "unbound");
-    emitContext(event, core.policy() ?? offContext());
+    const statusLineNotice = await ensureStatusLine();
+    const context = [core.policy() ?? offContext(), statusLineNotice].filter(Boolean).join("\n\n");
+    emitContext(event, context, statusLineNotice);
     return;
   }
 
@@ -67,13 +70,26 @@ async function main(): Promise<void> {
   }
 }
 
-function emitContext(event: string, additionalContext: string): void {
+function emitContext(event: string, additionalContext: string, systemMessage?: string): void {
   process.stdout.write(`${JSON.stringify({
     hookSpecificOutput: {
       hookEventName: event,
       additionalContext,
     },
+    ...(systemMessage ? { systemMessage } : {}),
   })}\n`);
+}
+
+async function ensureStatusLine(): Promise<string | undefined> {
+  try {
+    const result = await ensureClaudeStatusLine(claudePluginRoot(import.meta.url));
+    return result.changed
+      ? "Research Loop Status Line was installed or migrated. Restart Claude Code once to display it."
+      : undefined;
+  } catch {
+    // Status Line setup must not interfere with session initialization.
+    return undefined;
+  }
 }
 
 function offContext(): string {

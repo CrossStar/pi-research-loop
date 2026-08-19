@@ -85,10 +85,11 @@ terminal transition 和 reproduction fidelity guard 同样在 PreToolUse 生效�
 ### Status Line
 
 Claude Code Plugin manifest 当前不支持声明 `statusLine` 字段；strict validation 会将该字段
-判定为 ignored。Research Loop 因此提供一次性的显式安装器，而不是在 SessionStart Hook
-中静默修改用户设置。
+判定为 ignored。Research Loop 因此在首次 `SessionStart` 时运行一次性 installer，并通过
+`systemMessage` 明确提示用户重启。Claude Code 在 Hook 执行前已经读取本轮 settings，所以
+首次安装后必须额外重启一次。
 
-可以要求 Claude 调用：
+也可以要求 Claude 手动调用：
 
 ```text
 research_configure_statusline { "action": "install" }
@@ -104,8 +105,11 @@ npm run statusline:uninstall
 
 安装器将自包含 renderer 复制到稳定的 Claude 用户目录，并更新
 `~/.claude/settings.json`。如果用户已有 command-based status line，安装器会保存原配置、
-先运行原 command，再把 Research Loop 状态显示在下一行；卸载时恢复原配置。安装和卸载
-后需要重启 Claude Code。
+先运行原 command，再把 Research Loop 状态显示在下一行；卸载时恢复原配置。旧版
+`pi-research-loop` installer 会被自动迁移，同时保留 migration config 中的原 Status Line。
+
+显式卸载会写入 opt-out marker，防止下一次 `SessionStart` 自动重装。重新执行 install 会
+清除 marker。安装、迁移和卸载后都需要重启 Claude Code。
 
 Status Line 从共享 `ResearchCoreSnapshot` 读取：
 
