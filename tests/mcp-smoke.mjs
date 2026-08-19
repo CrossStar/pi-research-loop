@@ -43,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.1.2" });
+const client = new Client({ name: "research-loop-smoke", version: "0.1.1" });
 
 try {
   await client.connect(transport);
@@ -91,16 +91,8 @@ try {
     project,
   );
   assert.match(statusLineText, /BASE/);
-  assert.match(statusLineText, /Research/);
-  assert.match(statusLineText, /Experiment/);
-  assert.match(statusLineText, /Diagnostic/);
-  const styledStatusLineText = await runStatusLine(
-    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
-    project,
-    false,
-  );
-  assert.match(styledStatusLineText, /\u001b\[48;2;30;32;48m/);
-  assert.match(styledStatusLineText, /◈ Research/);
+  assert.match(statusLineText, /RESEARCH ON \| EXPERIMENT/);
+  assert.match(statusLineText, /PHASE DIAGNOSTIC/);
 
   const checkpoint = await client.callTool({
     name: "research_checkpoint",
@@ -134,16 +126,6 @@ try {
   assert.match(text, /CHECKPOINT REACHED/);
   assert.match(text, /"workMode": "normal"/);
 
-  await client.callTool({
-    name: "research_set_enabled",
-    arguments: { enabled: false },
-  });
-  const statusLineOffText = await runStatusLine(
-    join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
-    project,
-  );
-  assert.equal(statusLineOffText, "BASE");
-
   const statusLineUninstall = await client.callTool({
     name: "research_configure_statusline",
     arguments: { action: "uninstall" },
@@ -163,12 +145,9 @@ try {
   await rm(project, { recursive: true, force: true });
 }
 
-async function runStatusLine(scriptPath, projectDirectory, noColor = true) {
-  const env = { ...process.env };
-  if (noColor) env.NO_COLOR = "1";
-  else delete env.NO_COLOR;
+async function runStatusLine(scriptPath, projectDirectory) {
   const child = spawn(process.execPath, [scriptPath], {
-    env,
+    env: { ...process.env, NO_COLOR: "1" },
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stdin.end(JSON.stringify({

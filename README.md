@@ -134,17 +134,17 @@ research_abort_experiment
 
 ### Status Line
 
-Research Loop 关闭时不额外占用一行；启用后显示与 Powerline 主题协调的紧凑状态胶囊：
+状态行示例：
 
 ```text
-◈ Research · Normal · 2A · 0O
-◈ Research · Experiment · Reproduction · 6A · 3O · Review
-◈ Research · Checkpoint · 2 results
+RESEARCH OFF
+RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
+RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3 | PHASE REPRODUCTION · Baseline reproduction
+RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
 ```
 
-`A` 表示本轮 actions，`O` 表示已索引 outputs。Status Line 直接读取本地
-`ResearchCoreSnapshot`，不调用模型或 MCP，不写 Research State，并在错误时 fail-open。
-已有 command-based Status Line 会被保留并显示在 Research Loop 上方。
+Status Line 直接读取本地 `ResearchCoreSnapshot`，不调用模型或 MCP，不写 Research State，
+并在错误时 fail-open。已有 command-based Status Line 会被保留并显示在 Research Loop 上方。
 
 ## Pi 安装
 
