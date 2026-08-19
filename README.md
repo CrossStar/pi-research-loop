@@ -49,6 +49,20 @@ npm run build:claude
 claude --plugin-dir .
 ```
 
+首次使用时安装 Research Loop Status Line，然后重启 Claude Code：
+
+```bash
+npm run statusline:install
+```
+
+也可以要求 Claude 调用 `research_configure_statusline`。安装器会保留已有的 command
+status line，并将 Research Loop 状态追加为独立一行。可通过以下命令检查或卸载：
+
+```bash
+npm run statusline:status
+npm run statusline:uninstall
+```
+
 Claude Plugin 的开发说明和已知限制见
 [`docs/claude-plugin.md`](docs/claude-plugin.md)。
 
@@ -90,6 +104,7 @@ Research Loop 默认关闭。进入 Pi 后，使用以下命令控制扩展：
 research_set_enabled
 research_mode
 research_state
+research_configure_statusline
 research_checkpoint
 research_abort_experiment
 ```
@@ -98,12 +113,24 @@ Plugin hooks 会在 `SessionStart` 和 `UserPromptSubmit` 注入当前 Research 
 `PreToolUse` 阶段执行 Governor，并在写入受支持的 artifact 文件后记录 metadata。
 Research Loop 默认关闭；启用后从 Normal Mode 开始。
 
+Claude Status Line 持续显示权威 Research State，例如：
+
+```text
+RESEARCH OFF
+RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
+RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3 | PHASE REPRODUCTION · Baseline reproduction
+RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
+```
+
+状态行从操作系统临时目录中的 session snapshot 读取状态，不调用模型，也不会阻塞 MCP
+或 Hook。Experiment Mode 额外显示 intent 和 phase title。
+
 ## 架构
 
 ```text
 src/core/       与 Agent Harness 无关的状态、Governor、Policy、Checkpoint 和 Artifact metadata
 src/            Pi Extension adapter、Pi session persistence、TUI 和 artifact preview
-src/claude/     Claude Code state store、Hooks handler 和 MCP server
+src/claude/     Claude Code state store、Hooks、MCP server 和 Status Line
 skills/         Claude Code Research Loop Skill
 hooks/          Claude Code Hook registration
 ```

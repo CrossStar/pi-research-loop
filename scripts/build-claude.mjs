@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 
 await mkdir("dist/claude", { recursive: true });
 
-for (const entry of ["hook", "mcp-server"]) {
+for (const entry of ["hook", "mcp-server", "statusline", "statusline-cli"]) {
   await build({
     entryPoints: [`src/claude/${entry}.ts`],
     outfile: `dist/claude/${entry}.js`,

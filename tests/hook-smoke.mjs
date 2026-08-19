@@ -40,12 +40,19 @@ try {
   assert.equal(denied.hookSpecificOutput.permissionDecision, "deny");
   assert.match(denied.hookSpecificOutput.permissionDecisionReason, /read-oriented/);
 
+  await runHook({
+    session_id: sessionId,
+    cwd: project,
+    hook_event_name: "SessionEnd",
+  }, false);
+  assert.equal(await store.hasActiveState(), false);
+
   console.log("hook smoke test passed");
 } finally {
   await rm(project, { recursive: true, force: true });
 }
 
-async function runHook(input) {
+async function runHook(input, expectsOutput = true) {
   const child = spawn(process.execPath, [resolve("dist/claude/hook.js")], {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -56,5 +63,9 @@ async function runHook(input) {
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   const code = await new Promise((resolveCode) => child.on("close", resolveCode));
   assert.equal(code, 0, stderr);
+  if (!expectsOutput) {
+    assert.equal(stdout, "");
+    return undefined;
+  }
   return JSON.parse(stdout);
 }

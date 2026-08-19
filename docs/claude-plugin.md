@@ -34,9 +34,12 @@ pi-research-loop/
 │   ├── checkpoint.ts     # Pi tool schema、preview 和 TUI render adapter
 │   └── artifacts.ts      # Pi Artifact Radar、preview 和 TUI integration
 ├── src/claude/
-│   ├── state-store.ts    # Claude hook/MCP 共享状态
-│   ├── hook.ts           # Claude Code hook handler
-│   └── mcp-server.ts     # Claude lifecycle MCP tools
+│   ├── state-store.ts       # Claude hook/MCP/Status Line 共享状态
+│   ├── hook.ts              # Claude Code hook handler
+│   ├── mcp-server.ts        # Claude lifecycle MCP tools
+│   ├── statusline.ts        # 可组合的 Claude Status Line renderer
+│   ├── statusline-config.ts # 安装、恢复和已有 status line preservation
+│   └── statusline-cli.ts    # 本地 install/status/uninstall CLI
 ├── skills/research-loop/SKILL.md
 ├── hooks/hooks.json
 └── .claude-plugin/plugin.json # manifest and bundled MCP server registration
@@ -56,6 +59,7 @@ Mode 是同一主 session 的全局行为契约，不是四个 subagents。
 - `research_set_enabled`：启用或关闭 Research Loop；
 - `research_mode`：切换 Normal、Brainstorming、Exploration 或 Experiment；
 - `research_state`：读取权威状态、active experiment、artifacts 和 policy；
+- `research_configure_statusline`：安装、检查或卸载 Claude Status Line；
 - `research_checkpoint`：验证并格式化 checkpoint，然后正式结束 Experiment；
 - `research_abort_experiment`：仅在明确确认没有 interpretable evidence 时中止。
 
@@ -67,6 +71,7 @@ Experiment Mode 必须在进入时声明 title、question、intent 和 planned d
 `hooks/hooks.json` 注册：
 
 - `SessionStart`：初始化 session state，并注入 Plugin 状态；
+- `SessionEnd`：将 snapshot 标记为 inactive，避免无 Plugin session 显示过期状态；
 - `UserPromptSubmit`：记录当前用户请求、重置 round counters，并注入最新 policy；
 - `PreToolUse`：加载权威状态、运行共享 Governor、拒绝违规调用，并再次注入 policy；
 - `PostToolUse`：为 Write/Edit 类工具产生的受支持文件记录 artifact metadata。
@@ -74,6 +79,43 @@ Experiment Mode 必须在进入时声明 title、question、intent 和 planned d
 Governor 因此不只存在于 prompt 中。Brainstorming 和 Exploration 的写入会被实际拒绝；
 这些 read-oriented mode 中检测到的 empirical shell command 也会被拒绝。Experiment 的
 terminal transition 和 reproduction fidelity guard 同样在 PreToolUse 生效。
+
+### Status Line
+
+Claude Code Plugin manifest 当前不支持声明 `statusLine` 字段；strict validation 会将该字段
+判定为 ignored。Research Loop 因此提供一次性的显式安装器，而不是在 SessionStart Hook
+中静默修改用户设置。
+
+可以要求 Claude 调用：
+
+```text
+research_configure_statusline { "action": "install" }
+```
+
+也可以从仓库运行：
+
+```bash
+npm run statusline:install
+npm run statusline:status
+npm run statusline:uninstall
+```
+
+安装器将自包含 renderer 复制到稳定的 Claude 用户目录，并更新
+`~/.claude/settings.json`。如果用户已有 command-based status line，安装器会保存原配置、
+先运行原 command，再把 Research Loop 状态显示在下一行；卸载时恢复原配置。安装和卸载
+后需要重启 Claude Code。
+
+Status Line 从共享 `ResearchCoreSnapshot` 读取：
+
+```text
+RESEARCH OFF
+RESEARCH ON | NORMAL | ACTIONS 2 | OUTPUTS 0
+RESEARCH ON | EXPERIMENT | ACTIONS 6 | SOFT REVIEW | OUTPUTS 3 | PHASE REPRODUCTION · Baseline reproduction
+RESEARCH ON | CHECKPOINT REACHED | RESULTS 2
+```
+
+renderer 不调用模型或 MCP，不写 Research State，并在错误时 fail-open。没有 active Plugin
+session state 的项目不会追加 Research Loop 行。
 
 ## 状态持久化
 
@@ -95,13 +137,14 @@ Loop 的 Claude session。
 
 ## 本地开发与加载
 
-Claude Plugin 的 hook 和 MCP 入口会构建为自包含 JavaScript bundle，避免安装后的
-runtime 依赖解析问题。
+Claude Plugin 的 Hook、MCP 和 Status Line 入口会构建为自包含 JavaScript bundle，
+避免安装后的 runtime 依赖解析问题。
 
 ```bash
 npm install
 npm run build:claude
 claude plugin validate --strict .
+npm run statusline:install
 claude --plugin-dir .
 ```
 
@@ -126,8 +169,9 @@ claude plugin validate --strict .
 
 1. Core mode、Governor 和 checkpoint lifecycle smoke test；
 2. Hook session、policy injection 和 PreToolUse denial smoke test；
-3. 通过官方 MCP SDK client 启动 bundled server 并完成 enable → Experiment → checkpoint
-   → Normal 的端到端 smoke test。
+3. 通过官方 MCP SDK client 启动 bundled server，完成 enable → Experiment → checkpoint
+   → Normal，并验证 Status Line install、state rendering、已有 command composition 和
+   uninstall restore。
 
 ## 第一版边界
 
@@ -147,7 +191,6 @@ enable
 暂未作为第一优先级实现：
 
 - Pi 图片、表格和 widget 体验的 Claude 等价实现；
-- status line；
 - Bash 生成文件的完整实时 Artifact Radar；
 - 专用 explorer/researcher subagent；
 - marketplace 发布与自动升级；
@@ -165,4 +208,5 @@ checkpoint 语义。
    State。
 4. 在 Claude 提供稳定 session identity 后，将 state store 升级为并发安全的 per-session
    storage。
-5. 在核心行为稳定后增加 status line 和 marketplace packaging。
+5. 增加 marketplace packaging，并在 Claude Code 提供 Plugin 原生 Status Line registration
+   后替换一次性 settings installer。

@@ -23,6 +23,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (event === "SessionEnd") {
+    await store.endSession(input.session_id ?? "unbound");
+    return;
+  }
+
   const core = await store.loadCore();
   if (event === "UserPromptSubmit") {
     core.resetRequest(input.prompt ?? input.user_prompt ?? "");

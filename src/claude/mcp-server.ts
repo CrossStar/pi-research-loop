@@ -12,6 +12,12 @@ import {
 } from "../core/checkpoint.js";
 import type { ExperimentContext } from "../core/types.js";
 import { ClaudeStateStore } from "./state-store.js";
+import {
+  claudePluginRoot,
+  getClaudeStatusLineStatus,
+  installClaudeStatusLine,
+  uninstallClaudeStatusLine,
+} from "./statusline-config.js";
 
 const VERSION = "0.1.0";
 const store = new ClaudeStateStore();
@@ -155,6 +161,36 @@ server.registerTool(
       JSON.stringify(core.researchState, null, 2),
       core.policy() ?? "Research policy injection is disabled.",
     ].join("\n\n"));
+  },
+);
+
+server.registerTool(
+  "research_configure_statusline",
+  {
+    title: "Configure Research Loop Status Line",
+    description:
+      "Install, inspect, or uninstall the Claude Code Research Loop status line. Installation preserves and composes with an existing command status line. Restart Claude Code after changing it.",
+    inputSchema: {
+      action: z.enum(["install", "status", "uninstall"]),
+    },
+    annotations: { destructiveHint: true },
+  },
+  async ({ action }) => {
+    const result = action === "install"
+      ? await installClaudeStatusLine(claudePluginRoot(import.meta.url))
+      : action === "uninstall"
+        ? await uninstallClaudeStatusLine()
+        : await getClaudeStatusLineStatus();
+    const summary = result.installed ? "INSTALLED" : "NOT INSTALLED";
+    const preservation = result.preservesPreviousStatusLine
+      ? "The previous command status line is preserved and rendered above Research Loop."
+      : "No previous command status line is being composed.";
+    return textResult([
+      `Research Loop status line: ${summary}`,
+      `Claude settings: ${result.settingsPath}`,
+      preservation,
+      action === "status" ? "" : "Restart Claude Code for the status line setting to take effect.",
+    ].filter(Boolean).join("\n"));
   },
 );
 

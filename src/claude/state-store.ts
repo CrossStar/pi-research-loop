@@ -9,6 +9,7 @@ interface StoredClaudeState {
   sessionId: string;
   cwd: string;
   updatedAt: number;
+  active: boolean;
   core: ResearchCoreSnapshot;
 }
 
@@ -24,16 +25,27 @@ export class ClaudeStateStore {
 
   async beginSession(sessionId: string): Promise<ResearchCore> {
     const stored = await this.read();
-    if (stored?.sessionId === sessionId) return new ResearchCore(stored.core);
-    const core = new ResearchCore();
+    const core = stored?.sessionId === sessionId ? new ResearchCore(stored.core) : new ResearchCore();
     await this.write({
       schemaVersion: 1,
       sessionId,
       cwd: this.cwd,
       updatedAt: Date.now(),
+      active: true,
       core: core.snapshot(),
     });
     return core;
+  }
+
+  async endSession(sessionId: string): Promise<void> {
+    const stored = await this.read();
+    if (!stored || stored.sessionId !== sessionId) return;
+    await this.write({ ...stored, active: false, updatedAt: Date.now() });
+  }
+
+  async hasActiveState(): Promise<boolean> {
+    const stored = await this.read();
+    return stored?.active === true;
   }
 
   async loadCore(): Promise<ResearchCore> {
@@ -48,6 +60,7 @@ export class ClaudeStateStore {
       sessionId: sessionId ?? stored?.sessionId ?? process.env.CLAUDE_SESSION_ID ?? "unbound",
       cwd: this.cwd,
       updatedAt: Date.now(),
+      active: stored?.active ?? true,
       core: core.snapshot(),
     });
   }

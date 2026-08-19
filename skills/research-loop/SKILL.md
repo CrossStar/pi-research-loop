@@ -1,6 +1,6 @@
 ---
 name: research-loop
-description: This skill should be used when the user asks to "start a research loop", "enable research mode", "brainstorm research directions", "understand experiment code", "run an experiment", "reproduce a paper result", or requests evidence-first empirical investigation with checkpoints.
+description: This skill should be used when the user asks to "start a research loop", "enable research mode", "show research status", "configure the research status line", "brainstorm research directions", "understand experiment code", "run an experiment", "reproduce a paper result", or requests evidence-first empirical investigation with checkpoints.
 version: 0.1.0
 ---
 
@@ -20,6 +20,17 @@ ending the experiment lifecycle.
 Call `research_state` whenever the current mode or experiment context is uncertain. Treat the MCP
 state as authoritative. Hooks persist that state, inject the current policy, and enforce deterministic
 tool gates before tool execution.
+
+## Configure the Status Line
+
+Call `research_configure_statusline` with `action: "status"` when status-line installation is
+uncertain. With user approval, call it with `action: "install"`, then ask the user to restart Claude
+Code. Installation preserves an existing command-based Claude status line and renders Research Loop
+on an additional line. Use `action: "uninstall"` to restore the previous status-line setting.
+
+Treat the status line as the primary visible projection of Research State. It displays enabled state,
+Work Mode, action count, Soft Review, artifact count, and active Experiment intent and title. Keep the
+MCP state authoritative when display and lifecycle decisions differ.
 
 ## Select the Work Mode
 
