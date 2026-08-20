@@ -2,6 +2,15 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.4.1 - 2026-08-21
+
+### Checkpoint report fixes
+
+- Omit the Formula-aware analysis section and navigation entry when a checkpoint contains no TeX math, and render only formula-bearing checkpoint passages when it does.
+- Add a ready-to-copy SSH port-forward command below the rendered checkpoint URL, with `RESEARCH_LOOP_SSH_HOST` support for local SSH aliases.
+- Add case-insensitive JSON key-name search in Tree mode while preserving raw key/value search in Raw mode.
+- Render Pi checkpoint images through Chafa Sixel when available; retain Chafa symbols for `/artifacts` and native Pi image protocols as fallback.
+
 ## 0.4.0 - 2026-08-21
 
 ### Checkpoint presentation

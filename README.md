@@ -222,14 +222,31 @@ confirmation：批准后只放行该次 action；拒绝或取消会中止当前 
 
 Pi session 启动时会在 `127.0.0.1` 上建立仅限当前 session 的内存报告服务。每次
 `research_checkpoint` 完成后，终端输出的最后一段会给出对应报告 URL；插件只显示链接，
-不会自动打开浏览器。报告复用 `src/checkpoint-report-template.html` 的 LaTeX-like 版式，支持
-公式、结构化表格、图片、折叠实验详情，以及带搜索、Tree/Raw 切换和大数组分段加载的 JSON
-viewer。
+不会自动打开浏览器。URL 下方同时给出可直接复制到本地计算机执行的 SSH port-forward
+命令。报告复用 `src/checkpoint-report-template.html` 的 LaTeX-like 版式，支持按需出现的公式
+section、结构化表格、图片、折叠实验详情，以及带键名搜索、Tree/Raw 切换和大数组分段加载的
+JSON viewer。Checkpoint 没有 TeX 数学内容时，公式 section 和目录项不会生成。
 
 服务默认从端口 `43119` 开始向上查找空闲端口。可通过环境变量修改起始端口：
 
 ```bash
 RESEARCH_LOOP_CHECKPOINT_PORT=45000 pi -ne -e .
+```
+
+SSH 目标默认使用远端 `hostname`。如果本地 SSH config 使用 `moon` 之类的 alias，可以显式设置：
+
+```bash
+RESEARCH_LOOP_SSH_HOST=moon pi -ne -e .
+```
+
+输出命令会自动使用报告实际端口，例如：
+
+```bash
+ssh -N \\
+  -o RemoteCommand=none \\
+  -o RequestTTY=no \\
+  -L 43119:127.0.0.1:43119 \\
+  moon
 ```
 
 报告和当前 session 的 checkpoint history 只保存在内存中；session shutdown 时服务关闭并清空
@@ -238,9 +255,10 @@ MathJax 与 KaTeX 字体资源来自 CDN，因此公式和 TeX 字体的首次�
 
 ### Pi 图片渲染
 
-如果 `chafa` 可从 `PATH` 运行，Pi 的 Checkpoint 和 `/artifacts` 图片预览会优先使用 Chafa 的
-ANSI symbol renderer；如果 Chafa 不可用或无法解码某张图片，则自动回退到 Pi 原生的 Kitty、
-iTerm2、Ghostty、WezTerm 或 Warp 图片协议，不影响 artifact link 和网页图片。
+如果 `chafa` 可从 `PATH` 运行，Pi Checkpoint 中的图片会优先使用 Chafa 的 Sixel renderer；
+`/artifacts` 交互预览继续使用 Chafa ANSI symbol renderer。如果 Chafa 不可用或无法解码某张
+图片，则自动回退到 Pi 原生的 Kitty、iTerm2、Ghostty、WezTerm 或 Warp 图片协议，不影响
+artifact link 和网页图片。Checkpoint 的 Sixel 输出会按图片高度预留 TUI rows，避免覆盖后续文本。
 
 ### Pi Footer Status
 

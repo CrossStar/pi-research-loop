@@ -1769,6 +1769,51 @@
       return details;
     }
 
+    function renderJsonKeySearch(value, query) {
+      const root = el("div", "json-raw");
+      const normalizedQuery = query.trim().toLowerCase();
+      const matches = [];
+      const stack = [{ value, path: "$" }];
+      const limit = 500;
+      let capped = false;
+
+      while (stack.length) {
+        const current = stack.pop();
+        if (!current.value || typeof current.value !== "object") continue;
+        const array = Array.isArray(current.value);
+        const entries = Object.entries(current.value);
+        for (let index = entries.length - 1; index >= 0; index -= 1) {
+          const [key, child] = entries[index];
+          const path = array
+            ? `${current.path}[${key}]`
+            : /^[A-Za-z_$][\w$]*$/.test(key)
+              ? `${current.path}.${key}`
+              : `${current.path}[${JSON.stringify(key)}]`;
+          if (!array && key.toLowerCase().includes(normalizedQuery)) {
+            if (matches.length >= limit) capped = true;
+            else matches.push({ path, value: child });
+          }
+          if (child && typeof child === "object") stack.push({ value: child, path });
+        }
+      }
+
+      if (!matches.length) {
+        root.append(el("div", "json-empty", "没有匹配的键名"));
+        return root;
+      }
+      matches.forEach(match => {
+        const row = el("div", "json-primitive");
+        row.append(el("span", "json-key", `${match.path}: `));
+        if (match.value !== null && typeof match.value === "object") {
+          const count = Array.isArray(match.value) ? match.value.length : Object.keys(match.value).length;
+          row.append(el("span", "json-shape", Array.isArray(match.value) ? `[${count}]` : `{${count}}`));
+        } else row.append(primitiveSpan(match.value));
+        root.append(row);
+      });
+      if (capped) root.append(el("div", "json-empty", `仅显示前 ${limit} 个匹配键名，请缩小搜索范围。`));
+      return root;
+    }
+
     function renderRawJson(raw, query = "") {
       const root = el("div", "json-raw");
       const normalizedQuery = query.trim().toLowerCase();
@@ -1811,29 +1856,38 @@
       const depthButton = el("button", "json-action", "Depth: 2");
       const copyButton = el("button", "json-action", "Copy");
       const search = el("input", "json-search");
-      search.placeholder = "搜索 key / value…";
+      search.placeholder = "按键名搜索…";
       search.type = "search";
+      search.setAttribute("aria-label", "JSON key-name search");
       toolbar.append(titleNode, el("span", "json-stat", `${(bytes / 1024).toFixed(1)} KB`), el("span", "json-stat", `${stats.nodes.toLocaleString()} nodes`), el("span", "json-stat", `depth ${stats.maxDepth}`), treeButton, rawButton, depthButton, copyButton, search);
       const content = el("div", "json-content json-tree");
       let mode = "tree";
       let depth = 2;
+      let searchTimer;
       const draw = () => {
+        const query = search.value.trim();
         content.replaceChildren();
         content.className = `json-content ${mode === "tree" ? "json-tree" : ""}`;
-        if (mode === "tree") content.append(renderTreeNode(null, parsed, 0, depth));
-        else content.append(renderRawJson(raw, search.value));
+        if (mode === "tree") {
+          content.append(query ? renderJsonKeySearch(parsed, query) : renderTreeNode(null, parsed, 0, depth));
+        } else content.append(renderRawJson(raw, query));
         treeButton.classList.toggle("active", mode === "tree");
         rawButton.classList.toggle("active", mode === "raw");
-        search.hidden = mode !== "raw";
+        depthButton.hidden = mode !== "tree" || Boolean(query);
+        search.placeholder = mode === "tree" ? "按键名搜索…" : "搜索 raw key / value…";
+        search.setAttribute("aria-label", mode === "tree" ? "JSON key-name search" : "Raw JSON search");
       };
-      treeButton.addEventListener("click", () => { mode = "tree"; draw(); });
+      treeButton.addEventListener("click", () => { mode = "tree"; draw(); search.focus(); });
       rawButton.addEventListener("click", () => { mode = "raw"; draw(); search.focus(); });
       depthButton.addEventListener("click", () => {
         depth = depth === 1 ? 2 : depth === 2 ? 4 : depth === 4 ? 99 : 1;
         depthButton.textContent = depth === 99 ? "Depth: all" : `Depth: ${depth}`;
         draw();
       });
-      search.addEventListener("input", draw);
+      search.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(draw, 120);
+      });
       copyButton.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(raw); copyButton.textContent = "Copied"; }
         catch { copyButton.textContent = "Copy failed"; }
@@ -1886,6 +1940,30 @@
       $("#modal-image").src = src;
       $("#modal-title").textContent = title;
       $("#image-dialog").showModal();
+    }
+
+    function collectFormulaTexts(data) {
+      const ignoredKeys = new Set(["preview", "reportPreview", "image", "data", "artifact", "url", "absolutePath", "path"]);
+      const texts = [];
+      const seen = new Set();
+      const visit = (value, key = "") => {
+        if (ignoredKeys.has(key)) return;
+        if (typeof value === "string") {
+          const hasMath = /\$\$[\s\S]+?\$\$/.test(value)
+            || /(^|[^\\])\$(?!\$|\s)[^$\n]+\$(?!\d)/m.test(value)
+            || (value.includes("\\(") && value.includes("\\)"))
+            || (value.includes("\\[") && value.includes("\\]"));
+          if (hasMath && !seen.has(value)) {
+            seen.add(value);
+            texts.push(value);
+          }
+          return;
+        }
+        if (Array.isArray(value)) value.forEach(item => visit(item));
+        else if (value && typeof value === "object") Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
+      };
+      visit(data);
+      return texts;
     }
 
     function renderReport(data) {
@@ -1947,16 +2025,16 @@
         evidence.append(heading, renderResultTable(table));
       });
 
-      const formula = el("section", "section");
-      formula.id = "math";
-      formula.append(sectionHeading("Math rendering", "Formula-aware analysis", "MathJax preview"));
-      const formulaCard = el("div", "formula-card");
-      formulaCard.append(
-        richText("Checkpoint 文本中的 inline TeX 会保留在上下文中，例如 $\\Delta_{acc}=\\hat{a}-a_{ref}$。"),
-        el("div", "formula-display", "$$\\mathrm{CI}_{95\\%}(\\hat a)=\\left[Q_{0.025}(\\hat a^*), Q_{0.975}(\\hat a^*)\\right]$$"),
-        richText("复杂推导保持横向滚动，不压缩表格和正文。Ablation paired effect: $\\bar d = n^{-1}\\sum_i d_i$。")
-      );
-      formula.append(formulaCard);
+      const formulaTexts = collectFormulaTexts(data);
+      let formula;
+      if (formulaTexts.length) {
+        formula = el("section", "section");
+        formula.id = "math";
+        formula.append(sectionHeading("Math rendering", "Formula-aware analysis", `${formulaTexts.length} source passages`));
+        const formulaCard = el("div", "formula-card");
+        formulaTexts.forEach(text => formulaCard.append(richText(text, "formula-display")));
+        formula.append(formulaCard);
+      }
 
       const experiments = el("section", "section");
       experiments.id = "experiments";
@@ -1977,7 +2055,9 @@
       overall.append(overallCard);
 
       const footer = el("footer", "footer", "Research Loop checkpoint template · 数据由结构化 CheckpointDetails 渲染 · localhost session memory prototype");
-      report.append(toolbar, hero, summary, warningSection, evidence, formula, experiments, artifacts, overall, footer);
+      report.append(toolbar, hero, summary, warningSection, evidence);
+      if (formula) report.append(formula);
+      report.append(experiments, artifacts, overall, footer);
 
       renderNavigation(data);
       if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([report]).catch(() => {});
@@ -1985,9 +2065,11 @@
 
     function renderNavigation(data) {
       const nav = $("#side-nav");
-      [["Overview", "overview"], ["Executive summary", "summary"], ["Protocol deviations", "deviations"], ["Evidence tables", "evidence"], ["Formula rendering", "math"], ["Experiments", "experiments"], ["Artifacts & JSON", "artifacts"], ["Overall analysis", "analysis"]].forEach(([label, id]) => {
-        const link = el("a", "", label); link.href = `#${id}`; nav.append(link);
-      });
+      [["Overview", "overview"], ["Executive summary", "summary"], ["Protocol deviations", "deviations"], ["Evidence tables", "evidence"], ["Formula rendering", "math"], ["Experiments", "experiments"], ["Artifacts & JSON", "artifacts"], ["Overall analysis", "analysis"]]
+        .filter(([, id]) => document.getElementById(id))
+        .forEach(([label, id]) => {
+          const link = el("a", "", label); link.href = `#${id}`; nav.append(link);
+        });
       const experimentNav = $("#experiment-nav");
       data.experiments.forEach((experiment, index) => {
         const link = el("a"); link.href = `#experiment-${index + 1}`;

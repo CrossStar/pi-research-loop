@@ -13,7 +13,11 @@ const bundle = await build({
 const source = bundle.outputFiles[0]?.text;
 assert.ok(source, "checkpoint server bundle was not generated");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { CheckpointReportServer, renderCheckpointHtml } = await import(moduleUrl);
+const {
+  CheckpointReportServer,
+  formatSshPortForwardCommand,
+  renderCheckpointHtml,
+} = await import(moduleUrl);
 
 const template = "<!doctype html><script id=\"checkpoint-data\" type=\"application/json\">__RESEARCH_LOOP_CHECKPOINT_DATA__</script>";
 const details = {
@@ -29,6 +33,16 @@ const details = {
 const rendered = renderCheckpointHtml(template, details);
 assert.doesNotMatch(rendered, /Escaped <\/script>/);
 assert.match(rendered, /Escaped \\u003c\/script>/);
+assert.equal(
+  formatSshPortForwardCommand("http://127.0.0.1:43119/session/checkpoints/1", "moon"),
+  [
+    "ssh -N \\",
+    "  -o RemoteCommand=none \\",
+    "  -o RequestTTY=no \\",
+    "  -L 43119:127.0.0.1:43119 \\",
+    "  moon",
+  ].join("\n"),
+);
 
 const server = new CheckpointReportServer({
   basePort: 43119,

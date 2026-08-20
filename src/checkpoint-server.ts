@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { CheckpointDetails } from "./checkpoint.js";
 
@@ -176,6 +177,21 @@ export class CheckpointReportServer {
     });
     response.end(request.method === "HEAD" ? undefined : html);
   }
+}
+
+export function formatSshPortForwardCommand(
+  reportUrl: string,
+  sshHost = process.env.RESEARCH_LOOP_SSH_HOST?.trim() || hostname(),
+): string {
+  const port = new URL(reportUrl).port;
+  if (!port) throw new Error(`Checkpoint report URL has no port: ${reportUrl}`);
+  return [
+    "ssh -N \\",
+    "  -o RemoteCommand=none \\",
+    "  -o RequestTTY=no \\",
+    `  -L ${port}:127.0.0.1:${port} \\`,
+    `  ${sshHost}`,
+  ].join("\n");
 }
 
 export function renderCheckpointHtml(template: string, details: CheckpointDetails): string {

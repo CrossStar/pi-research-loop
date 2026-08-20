@@ -20,6 +20,7 @@ import {
   formatResultTable,
   normalizeCheckpointExperiment as normalizeCoreCheckpointExperiment,
 } from "./core/checkpoint.js";
+import { formatSshPortForwardCommand } from "./checkpoint-server.js";
 import { createTerminalImage } from "./terminal-image.js";
 
 export type ResearchResultRole = "evidence" | "diagnostic" | "dataset" | "intermediate";
@@ -133,6 +134,7 @@ export interface CheckpointDetails {
   next: string;
   results: CheckpointResult[];
   reportUrl?: string;
+  portForwardCommand?: string;
 }
 
 interface CheckpointDependencies {
@@ -297,12 +299,15 @@ export function registerResearchCheckpoint(
       };
       try {
         details.reportUrl = await dependencies.publish(details);
+        if (details.reportUrl) details.portForwardCommand = formatSshPortForwardCommand(details.reportUrl);
       } catch (error) {
         ctx.ui.notify(`Checkpoint web report unavailable: ${String(error)}`, "warning");
       }
       dependencies.onReached(results.length, ctx);
       const report = formatCheckpointReport(details);
-      const text = details.reportUrl ? `${report}\n\nRendered checkpoint: ${details.reportUrl}` : report;
+      const text = details.reportUrl
+        ? `${report}\n\nRendered checkpoint: ${details.reportUrl}\n${details.portForwardCommand ?? ""}`.trimEnd()
+        : report;
       return {
         content: [{ type: "text" as const, text }],
         details,
@@ -391,6 +396,7 @@ function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
             maxWidthCells: 72,
             maxHeightCells: 24,
             filename: result.artifact.name,
+            chafaFormat: "sixels",
           },
         ),
       );
@@ -461,9 +467,10 @@ function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
     container.addChild(new Text(`${theme.fg("accent", theme.bold("Relevant Artifacts"))}\n${links.join("\n")}`, 0, 1));
   }
   if (details.reportUrl) {
+    const forwarding = details.portForwardCommand ? `\n${details.portForwardCommand}` : "";
     container.addChild(
       new Text(
-        `${theme.fg("accent", theme.bold("Rendered Checkpoint"))}\n${terminalLink(details.reportUrl, details.reportUrl)}`,
+        `${theme.fg("accent", theme.bold("Rendered Checkpoint"))}\n${terminalLink(details.reportUrl, details.reportUrl)}${forwarding}`,
         0,
         1,
       ),

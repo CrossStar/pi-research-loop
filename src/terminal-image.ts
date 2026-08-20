@@ -5,6 +5,7 @@ export interface TerminalImageOptions {
   maxWidthCells: number;
   maxHeightCells: number;
   filename?: string;
+  chafaFormat?: "symbols" | "sixels";
 }
 
 interface ImageTheme {
@@ -13,7 +14,7 @@ interface ImageTheme {
 
 let chafaAvailable: boolean | undefined;
 
-/** Prefer Chafa's ANSI symbol renderer, then fall back to Pi's native terminal-image protocols. */
+/** Prefer the requested Chafa renderer, then fall back to Pi's native terminal-image protocols. */
 export function createTerminalImage(
   data: string,
   mimeType: string,
@@ -23,6 +24,27 @@ export function createTerminalImage(
   const fallback = new Image(data, mimeType, theme, options);
   if (!hasChafa()) return fallback;
   return new ChafaImage(data, fallback, options);
+}
+
+export function buildChafaArguments(
+  format: "symbols" | "sixels",
+  width: number,
+  height: number,
+): string[] {
+  return [
+    `--format=${format}`,
+    "--colors=full",
+    `--size=${width}x${height}`,
+    "-",
+  ];
+}
+
+export function formatSixelLines(output: string, rows: number): string[] {
+  const sixel = output.replace(/[\r\n]+$/, "");
+  const reservedRows = Math.max(1, rows);
+  const rowOffset = reservedRows - 1;
+  const moveUp = rowOffset > 0 ? `\u001b[${rowOffset}A` : "";
+  return [...Array(rowOffset).fill(""), `${moveUp}${sixel}`];
 }
 
 export function hasChafa(): boolean {
@@ -54,12 +76,11 @@ class ChafaImage implements Component {
 
     const result = spawnSync(
       "chafa",
-      [
-        "--format=symbols",
-        "--colors=full",
-        `--size=${targetWidth}x${this.options.maxHeightCells}`,
-        "-",
-      ],
+      buildChafaArguments(
+        this.options.chafaFormat ?? "symbols",
+        targetWidth,
+        this.options.maxHeightCells,
+      ),
       {
         input: Buffer.from(this.data, "base64"),
         encoding: "utf8",
@@ -74,6 +95,10 @@ class ChafaImage implements Component {
     }
 
     this.cachedWidth = targetWidth;
+    if (this.options.chafaFormat === "sixels") {
+      this.cachedLines = formatSixelLines(result.stdout, this.options.maxHeightCells);
+      return this.cachedLines;
+    }
     this.cachedLines = result.stdout
       .replaceAll("\r", "")
       .split("\n")

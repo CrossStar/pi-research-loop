@@ -43,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.4.0" });
+const client = new Client({ name: "research-loop-smoke", version: "0.4.1" });
 
 try {
   await client.connect(transport);
