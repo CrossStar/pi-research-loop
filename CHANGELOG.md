@@ -2,6 +2,14 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## Unreleased
+
+### Pi status design
+
+- Move Pi Research Loop state from a full-width below-editor widget into the native footer status area.
+- Match the approved Claude Terminal Rail semantics with compact lowercase labels and hollow/solid markers.
+- Use Pi theme colors for OFF, modes, Experiment, Checkpoint, and soft-review states.
+
 ## 0.1.3 - 2026-08-19
 
 ### Changed

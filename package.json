@@ -22,6 +22,7 @@
     "statusline:install": "npm run build:claude && node dist/claude/statusline-cli.js install",
     "statusline:status": "node dist/claude/statusline-cli.js status",
     "statusline:uninstall": "node dist/claude/statusline-cli.js uninstall",
+    "test:pi": "node tests/pi-status-smoke.mjs && node tests/pi-runtime-smoke.mjs",
     "test:claude": "npm run build:claude && node tests/core-smoke.mjs && node tests/hook-smoke.mjs && node tests/mcp-smoke.mjs"
   },
   "peerDependencies": {

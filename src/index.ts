@@ -186,7 +186,8 @@ export default function researchLoop(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", (_event, ctx) => {
+    runtime.clearStatus(ctx);
     radar?.stop();
     radar = undefined;
     activeContext = undefined;
