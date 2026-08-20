@@ -27,9 +27,20 @@ export function evaluateResearchFidelity(toolName, input, userPrompt) {
     const serialized = typeof input === "string" ? input : JSON.stringify(input);
     if (!SAMPLE_SCOPE_REDUCTION.test(serialized))
         return { block: false };
+    const reason = "This reproduction reduces samples, steps, seeds, or repeats without approval. Tell the user the original and proposed settings, why they would change, and how that affects the result, then obtain explicit approval.";
     return {
         block: true,
-        reason: "This reproduction reduces samples, steps, seeds, or repeats without approval. Tell the user the original and proposed settings, why they would change, and how that affects the result, then obtain explicit approval.",
+        reason,
+        approval: {
+            kind: "protocol-deviation",
+            title: "Approve protocol deviation?",
+            message: [
+                "Research Loop detected a reduced reproduction scope. Approving allows this exact action, but the run must be reported as diagnostic or as an explicit protocol deviation.",
+                "",
+                preview(serialized),
+            ].join("\n"),
+            declineReason: "User declined the reproduction protocol deviation.",
+        },
     };
 }
 export function evaluateResearchCommand(command, userPrompt) {
@@ -59,12 +70,27 @@ export function evaluateResearchCommand(command, userPrompt) {
     if (LONG_JOB_PATTERN.test(command)) {
         if (REPRODUCTION_INTENT.test(userPrompt))
             return { block: false };
+        const reason = "Research Loop requires user approval before starting a likely long-running job.";
         return {
             block: true,
-            reason: "Research Loop blocked a likely long-running job. Ask before escalating cost.",
+            reason,
+            approval: {
+                kind: "cost-escalation",
+                title: "Approve costly execution?",
+                message: [
+                    "This command may start a long-running or scheduled job. Approve this exact execution?",
+                    "",
+                    preview(command),
+                ].join("\n"),
+                declineReason: "User declined the long-running job.",
+            },
         };
     }
     return { block: false };
+}
+function preview(value, maximum = 600) {
+    const compact = value.trim();
+    return compact.length <= maximum ? compact : `${compact.slice(0, maximum)}…`;
 }
 const MODE_GUIDANCE = {
     brainstorming: "Compare genuinely different options and recommend a direction. Do not edit files or run empirical work in this mode.",

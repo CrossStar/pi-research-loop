@@ -33,9 +33,19 @@ export interface ResearchState {
   artifacts: ArtifactMetadata[];
 }
 
+export type ApprovalKind = "cost-escalation" | "protocol-deviation";
+
+export interface ApprovalRequest {
+  kind: ApprovalKind;
+  title: string;
+  message: string;
+  declineReason: string;
+}
+
 export interface GateDecision {
   block: boolean;
   reason?: string;
+  approval?: ApprovalRequest;
 }
 
 export interface ToolGateDecision extends GateDecision {

@@ -11,7 +11,7 @@
       "name": "research-loop",
       "source": "./",
       "description": "A session-wide research state machine with governed work modes, persistent experiment lifecycle, structured checkpoints, artifact metadata, and a composable status line.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "author": {
         "name": "CrossStar",
         "url": "https://github.com/CrossStar"

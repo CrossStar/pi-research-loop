@@ -2,6 +2,15 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.3.1 - 2026-08-20
+
+### User decisions
+
+- Detect the optional `ask_user_question` Pi tool and inject balanced guidance at material protocol, cost/scope trade-off, and next-experiment branch decisions.
+- Surface questionnaire waits in the Pi footer without making the third-party package a hard dependency; cancelling the questionnaire aborts the current turn.
+- Replace advisory cost and protocol blocks in Pi with real host confirmation dialogs; approval permits the exact action, while decline aborts the current turn.
+- Stop the Pi agent turn when it repeats an unchanged blocked tool call, returning control instead of allowing an automatic retry loop.
+
 ## 0.3.0 - 2026-08-20
 
 ### Work modes

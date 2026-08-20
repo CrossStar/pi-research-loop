@@ -27,6 +27,10 @@ assert.equal(core.enterMode("exploration", "Understand the experiment").block, f
 assert.match(core.policy(), /Read only the code and materials relevant to the current objective/);
 assert.equal(core.evaluateToolCall("Read", { file_path: "train.py" }), undefined);
 assert.equal(core.evaluateToolCall("Bash", { command: "python train.py" })?.block, true);
+const scheduledExploration = core.evaluateToolCall("Bash", { command: "sbatch repro/eval.sbatch" });
+assert.equal(scheduledExploration?.block, true);
+assert.equal(scheduledExploration?.approval, undefined);
+assert.match(scheduledExploration?.reason, /switch to Experiment Mode/);
 assert.equal(
   core.evaluateToolCall("mcp__plugin-research-loop__research_mode", {
     mode: "brainstorming",
@@ -46,6 +50,12 @@ const experiment = {
   plannedDataScope: "validation split, 100 samples, one seed",
 };
 assert.equal(core.enterMode("experiment", "Measure convergence", experiment).block, false);
+const costlyRun = core.evaluateToolCall("Bash", {
+  command: "sbatch repro/official_models/eval_obfuscated_activations.sbatch",
+});
+assert.equal(costlyRun?.block, true);
+assert.equal(costlyRun?.approval?.kind, "cost-escalation");
+core.acceptApprovedToolCall();
 assert.equal(core.enterMode("exploration", "silently leave").block, true);
 
 const reproductionCore = new ResearchCore();
@@ -59,9 +69,11 @@ assert.equal(reproductionCore.enterMode("experiment", "Reproduce the result", {
   reference: "paper and repository",
 }).block, false);
 assert.match(reproductionCore.policy(), /check the official paper/);
-assert.equal(reproductionCore.evaluateToolCall("Bash", {
+const reducedReproduction = reproductionCore.evaluateToolCall("Bash", {
   command: "python train.py --max_samples 100",
-})?.block, true);
+});
+assert.equal(reducedReproduction?.block, true);
+assert.equal(reducedReproduction?.approval?.kind, "protocol-deviation");
 
 const approvedDiagnostic = new ResearchCore();
 approvedDiagnostic.setEnabled(true);

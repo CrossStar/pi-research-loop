@@ -15,8 +15,12 @@ interface PiStatusProjection {
   enabled: boolean;
 }
 
-export function renderPiResearchStatus(snapshot: ResearchCoreSnapshot, theme: PiStatusTheme): string {
-  const projection = projectPiStatus(snapshot);
+export function renderPiResearchStatus(
+  snapshot: ResearchCoreSnapshot,
+  theme: PiStatusTheme,
+  userDecisionPending = false,
+): string {
+  const projection = projectPiStatus(snapshot, userDecisionPending);
   const marker = theme.fg(projection.tone, projection.marker);
   const research = theme.fg(projection.enabled ? "accent" : "dim", "research");
   const mode = theme.fg(projection.tone, projection.mode);
@@ -26,7 +30,10 @@ export function renderPiResearchStatus(snapshot: ResearchCoreSnapshot, theme: Pi
   return `${marker} ${research}  ${mode}${details}`;
 }
 
-export function projectPiStatus(snapshot: ResearchCoreSnapshot): PiStatusProjection {
+export function projectPiStatus(
+  snapshot: ResearchCoreSnapshot,
+  userDecisionPending = false,
+): PiStatusProjection {
   if (!snapshot.state.enabled) {
     return { marker: "◇", mode: "off", details: [], tone: "dim", enabled: false };
   }
@@ -51,6 +58,10 @@ export function projectPiStatus(snapshot: ResearchCoreSnapshot): PiStatusProject
   if (snapshot.softReviewPending) {
     projection.tone = "warning";
     projection.details.push("review due");
+  }
+  if (userDecisionPending) {
+    projection.tone = "warning";
+    projection.details.push("waiting for decision");
   }
   return projection;
 }

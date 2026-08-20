@@ -30,6 +30,10 @@ assert.equal(
   renderPiResearchStatus(exploration.snapshot(), plainTheme),
   "◇ research  exploration · read only",
 );
+assert.equal(
+  renderPiResearchStatus(exploration.snapshot(), plainTheme, true),
+  "◇ research  exploration · read only · waiting for decision",
+);
 
 const experiment = new ResearchCore();
 experiment.setEnabled(true);

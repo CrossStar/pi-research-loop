@@ -16,6 +16,8 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 - **完整实验生命周期**：Experiment 必须通过 Checkpoint 或有效 Abort 正式结束。
 - **复现设置保护**：禁止未经用户同意缩小数据、改变 split、替换 checkpoint、减少 seeds
   或修改其他关键设置；缩减运行必须明确作为 diagnostic。
+- **真实用户决策**：Pi 对精确的成本升级和协议偏差显示同步确认；可选检测
+  `ask_user_question`，在关键研究分支中使用结构化问答而不是猜测。
 - **结构化 evidence**：Checkpoint 记录实际实验条件、参考来源、设置变化、结果、分析和
   下一步。
 - **可见状态**：Claude Status Line 持续展示 mode、actions、artifacts、Soft Review 和
@@ -193,6 +195,29 @@ Pi 中使用：
 /artifacts
 ```
 
+### 结构化用户决策（可选）
+
+Research Loop 会检测当前 active tools 中是否存在 `ask_user_question`。安装
+`@juicesharp/rpiv-ask-user-question` 后，Pi policy 会要求 Agent 仅在以下关键决策点集中询问：
+
+- 会实质改变科研解释的 protocol 或 data scope；
+- 多个成本或运行范围方案之间的选择；
+- 多个真正不同的下一实验分支；
+- Checkpoint 前确实需要用户选择下一方向。
+
+```bash
+pi install npm:@juicesharp/rpiv-ask-user-question
+```
+
+这是可选集成，不是 Research Loop 的运行时依赖。普通、可逆或用户已经回答的选择不会重复询问。
+结构化问答打开时 footer 会显示 `waiting for decision`；用户按 Esc 取消问卷时，Research Loop
+会中止当前 turn 并交还控制权，而不是让 Agent 再次发起同一问卷。
+
+对于 Governor 已经识别出的某一条精确命令或设置变更，Research Loop 直接使用 Pi host
+confirmation：批准后只放行该次 action；拒绝或取消会中止当前 Agent turn。对于其他 Governor
+拒绝，首次结果会明确禁止原样重试；如果 Agent 仍重复同一 tool call，第二次拒绝会主动中止
+当前 turn 并交还控制权。
+
 ### Pi Footer Status
 
 Pi 版本使用原生 footer status，不再在编辑器下方占用一整行。视觉语义与 Claude Terminal
@@ -203,6 +228,7 @@ Rail 一致，同时使用当前 Pi theme 的语义色：
 ◇ research  brainstorming · read only
 ◇ research  exploration · read only
 ◆ research  experiment · reproduction · 6 actions · 3 outputs · review due
+◆ research  experiment · diagnostic · 3 actions · 1 output · waiting for decision
 ◆ research  checkpoint · 2 results
 ```
 

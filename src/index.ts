@@ -4,7 +4,13 @@ import { Container, Image, Key, matchesKey, Text } from "@earendil-works/pi-tui"
 import { Type } from "typebox";
 import { ArtifactRadar, formatSize, loadArtifactPreview } from "./artifacts.js";
 import { registerResearchCheckpoint } from "./checkpoint.js";
-import { POLICY_MESSAGE, ResearchRuntime } from "./runtime.js";
+import {
+  POLICY_MESSAGE,
+  ResearchRuntime,
+  shouldAbortForCancelledQuestionnaire,
+} from "./runtime.js";
+
+const ASK_USER_BLOCKED_EVENT = "rpiv:ask-user:blocked";
 
 export default function researchLoop(pi: ExtensionAPI): void {
   const runtime = new ResearchRuntime(pi);
@@ -163,6 +169,12 @@ export default function researchLoop(pi: ExtensionAPI): void {
     },
   });
 
+  pi.events.on(ASK_USER_BLOCKED_EVENT, (payload: unknown) => {
+    if (!activeContext || !payload || typeof payload !== "object") return;
+    const active = (payload as { active?: unknown }).active;
+    if (typeof active === "boolean") runtime.setUserDecisionPending(active, activeContext);
+  });
+
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
     runtime.startSession(ctx);
@@ -222,6 +234,12 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   pi.on("tool_execution_start", () => {
     if (runtime.enabled) radar?.beginCapture();
+  });
+
+  pi.on("tool_result", (event, ctx) => {
+    if (!runtime.enabled || !shouldAbortForCancelledQuestionnaire(event.toolName, event.details)) return;
+    ctx.abort();
+    ctx.ui.notify("Research decision questionnaire was cancelled; the current turn was stopped.", "info");
   });
 
   pi.on("tool_execution_end", () => {
