@@ -8,6 +8,7 @@ import type {
   ToolGateDecision,
   WorkMode,
 } from "./core/types.js";
+import { renderPiResearchStatus } from "./pi-status.js";
 
 export const STATE_ENTRY = "research-loop-state";
 export const POLICY_MESSAGE = "research-loop-policy";
@@ -113,12 +114,17 @@ export class ResearchRuntime {
   }
 
   renderStatus(ctx: ExtensionContext): void {
-    const status = this.core.projectStatus();
-    ctx.ui.setWidget(
-      "research-loop-status",
-      [ctx.ui.theme.fg(status.tone, status.text)],
-      { placement: "belowEditor" },
+    // Clear the pre-0.2 widget when hot-reloading an existing Pi session.
+    ctx.ui.setWidget("research-loop-status", undefined);
+    ctx.ui.setStatus(
+      "research-loop",
+      renderPiResearchStatus(this.core.snapshot(), ctx.ui.theme),
     );
+  }
+
+  clearStatus(ctx: ExtensionContext): void {
+    ctx.ui.setWidget("research-loop-status", undefined);
+    ctx.ui.setStatus("research-loop", undefined);
   }
 
   private persist(): void {

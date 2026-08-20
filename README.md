@@ -32,7 +32,7 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 | Research Checkpoint | Markdown report | TUI + Markdown report |
 | Artifact metadata | Write/Edit Hooks | Artifact Radar |
 | Artifact preview | Claude 原生文件读取 | Pi TUI 图片和表格 preview |
-| Status display | Claude Status Line | Pi widget |
+| Status display | Claude Status Line | Pi footer status |
 
 ## Claude Code 安装
 
@@ -193,6 +193,24 @@ Pi 中使用：
 /research off
 /artifacts
 ```
+
+### Pi Footer Status
+
+Pi 版本使用原生 footer status，不再在编辑器下方占用一整行。视觉语义与 Claude Terminal
+Rail 一致，同时使用当前 Pi theme 的语义色：
+
+```text
+◇ research  off
+◇ research  normal · 2 actions · 1 output
+◇ research  brainstorming · read only
+◇ research  exploration · read only
+◆ research  experiment · reproduction · 6 actions · 3 outputs · review due
+◆ research  checkpoint · 2 results
+```
+
+Normal 和 Exploration 使用 accent，Brainstorming 和 soft review 使用 warning，Experiment 和
+Checkpoint 使用 success。扩展在 reload 时会清除旧 `belowEditor` widget，在 session shutdown
+时清理 footer status。
 
 ## Work Modes
 
