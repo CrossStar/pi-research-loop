@@ -107,37 +107,34 @@ export function createDispatch(input: {
 }
 
 export function evaluateSubagentTool(lease: SubagentLease, toolName: string): ToolGateDecision | undefined {
-  if (!lease.active) return { block: true, reason: "This Research Subagent lease is no longer active." };
+  if (!lease.active) return { block: true, reason: "This research subagent task has ended." };
   if (isLifecycleTool(toolName)) {
     return {
       block: true,
-      reason: "Research lifecycle tools are parent-owned and cannot be called from a subagent.",
+      reason: "Research mode and checkpoint tools can only be called from the main session.",
     };
   }
   if (isResearchStateTool(toolName)) return undefined;
   if (isAgentTool(toolName)) {
-    return { block: true, reason: "Nested Agent dispatch is not allowed from a Research Subagent." };
+    return { block: true, reason: "Return the findings to the main session instead of starting another agent." };
   }
   if (READ_ONLY_TOOLS.has(toolName.toLowerCase())) return undefined;
   return {
     block: true,
-    reason:
-      `Research Subagent ${lease.agentType} has a read-only ${lease.mode} lease. Use Read, Grep, Glob, or return control to the parent agent.`,
+    reason: "This research subagent can only read. Use Read, Grep, Glob, or return the task to the main session.",
   };
 }
 
 export function subagentPolicy(lease: SubagentLease): string {
-  const review = lease.capabilities.includes("review")
-    ? "Review protocol fidelity, source conflicts, evidence quality, and claim boundaries."
-    : "Build minimum sufficient understanding with precise repository-relative citations.";
+  const task = lease.capabilities.includes("review")
+    ? "Check the requested method or result against the relevant material and cite the important differences."
+    : "Trace only the code and materials needed for the objective and cite useful repository locations.";
   return [
-    `[RESEARCH SUBAGENT | ${lease.mode.toUpperCase()} LEASE]`,
-    `Agent: ${lease.agentType}`,
+    `[RESEARCH SUBAGENT: ${lease.mode.toUpperCase()}]`,
     `Objective: ${lease.objective}`,
-    "The parent agent owns Research Loop state, Work Mode, Experiment lifecycle, and Checkpoint decisions.",
-    "This lease is read-only. Do not edit files, run shell commands or empirical work, dispatch nested agents, or call lifecycle MCP tools.",
-    review,
-    "Return a compact result with findings, citations, conflicts or uncertainty, and a recommended next step.",
+    "Use Read, Grep, Glob, and other read-only lookup tools. Do not edit files, run commands or experiments, or start another agent.",
+    task,
+    "Return the relevant findings directly.",
   ].join("\n");
 }
 

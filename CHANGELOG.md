@@ -16,6 +16,12 @@ All notable changes to Research Loop are documented in this file.
 - Lifecycle transitions now complete in their MCP handlers and wait for active Subagents.
 - Research Subagents inherit an immutable Work Mode lease and cannot mutate parent lifecycle state.
 
+### Agent guidance
+
+- Replace governance-heavy mode, Skill, and Subagent prompts with concise task-oriented guidance.
+- Stop reinjecting the full policy before every allowed tool call while retaining the existing tool restrictions.
+- Keep reproduction-setting reminders specific to active reproduction experiments.
+
 ## 0.1.3 - 2026-08-19
 
 ### Changed

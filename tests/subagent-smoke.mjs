@@ -29,7 +29,7 @@ try {
     prompt: "Use parallel read-only agents to inspect protocol and implementation",
   });
 
-  const dispatch = await runHook({
+  await runHook({
     session_id: sessionId,
     cwd: project,
     hook_event_name: "PreToolUse",
@@ -40,13 +40,22 @@ try {
       description: "Map protocol",
       prompt: "Read the repository and map the protocol with citations.",
     },
-  });
-  assert.equal(dispatch.hookSpecificOutput.permissionDecision, undefined);
+  }, false);
   assert.equal(await store.activeSubagentCount(sessionId), 1);
   assert.match(
     await runStatusLine(join(claudeHome, "research-loop", "statusline.mjs")),
-    /exploration  ·  blueprint  ·  1 agent/,
+    /exploration  ·  read only  ·  1 agent/,
   );
+
+  await runHook({
+    session_id: sessionId,
+    cwd: project,
+    hook_event_name: "PostToolUse",
+    tool_name: "Agent",
+    tool_use_id: "dispatch-explorer",
+    tool_input: {},
+  }, false);
+  assert.equal(await store.activeSubagentCount(sessionId), 1);
 
   const blockedTransition = await runHook({
     session_id: sessionId,
@@ -57,7 +66,7 @@ try {
     tool_input: { mode: "normal", objective: "Implement next step" },
   });
   assert.equal(blockedTransition.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(blockedTransition.hookSpecificOutput.permissionDecisionReason, /active Research Subagents/);
+  assert.ok(blockedTransition.hookSpecificOutput.permissionDecisionReason);
 
   const started = await runHook({
     session_id: sessionId,
@@ -66,23 +75,22 @@ try {
     agent_id: "agent-explorer-1",
     agent_type: "Explore",
   });
-  assert.match(started.hookSpecificOutput.additionalContext, /RESEARCH SUBAGENT \| EXPLORATION LEASE/);
+  assert.match(started.hookSpecificOutput.additionalContext, /RESEARCH SUBAGENT: EXPLORATION/);
+  assert.match(started.hookSpecificOutput.additionalContext, /Objective: Read the repository and map the protocol with citations/);
 
-  const allowedRead = await runHook({
+  await runHook({
     session_id: sessionId,
     transcript_path: join(project, "subagents", "agent-agent-explorer-1.jsonl"),
     cwd: project,
     hook_event_name: "PreToolUse",
     tool_name: "Read",
     tool_input: { file_path: "README.md" },
-  });
-  assert.equal(allowedRead.hookSpecificOutput.permissionDecision, undefined);
-  assert.match(allowedRead.hookSpecificOutput.additionalContext, /read-only/);
+  }, false);
 
-  for (const [toolName, reason] of [
-    ["Write", /read-only/],
-    ["Agent", /Nested Agent/],
-    ["mcp__plugin_research-loop_research-loop__research_mode", /parent-owned/],
+  for (const toolName of [
+    "Write",
+    "Agent",
+    "mcp__plugin_research-loop_research-loop__research_mode",
   ]) {
     const denied = await runHook({
       session_id: sessionId,
@@ -94,7 +102,8 @@ try {
       tool_input: {},
     });
     assert.equal(denied.hookSpecificOutput.permissionDecision, "deny");
-    assert.match(denied.hookSpecificOutput.permissionDecisionReason, reason);
+    assert.ok(denied.hookSpecificOutput.permissionDecisionReason);
+    assert.equal(denied.hookSpecificOutput.additionalContext, undefined);
   }
 
   await Promise.all(Array.from({ length: 12 }, (_, index) =>
@@ -116,15 +125,14 @@ try {
   }, false);
   assert.equal(await store.activeSubagentCount(sessionId), 0);
 
-  const transition = await runHook({
+  await runHook({
     session_id: sessionId,
     cwd: project,
     hook_event_name: "PreToolUse",
     tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
     tool_use_id: "transition-after-agent",
     tool_input: { mode: "normal", objective: "Implement next step" },
-  });
-  assert.equal(transition.hookSpecificOutput.permissionDecision, undefined);
+  }, false);
   const transitioningCore = await store.loadCore();
   assert.equal(transitioningCore.lifecycleTransitionPending, true);
   transitioningCore.completeLifecycleTransition();
@@ -138,10 +146,10 @@ try {
     tool_use_id: "dispatch-reviewer",
     tool_input: {
       subagent_type: "research-reviewer",
-      description: "Review fidelity",
-      prompt: "Review protocol fidelity without modifying files.",
+      description: "Review settings",
+      prompt: "Compare the experiment settings with the local reference files.",
     },
-  });
+  }, false);
   assert.equal(await store.activeSubagentCount(sessionId), 1);
   await runHook({
     session_id: sessionId,

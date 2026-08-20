@@ -55,8 +55,9 @@ research-loop/
 
 ### Skill
 
-`skills/research-loop/SKILL.md` 是用户入口和 Research Loop 工作说明。它强调四种 Work
-Mode 是同一主 session 的全局行为契约，不是四个 subagents。
+`skills/research-loop/SKILL.md` 是用户入口和 Research Loop 使用说明。四种 Work Mode 表示
+同一主 session 当前正在做的工作，不是四个 subagents。模式切换后 Agent 直接开始任务，不向
+用户复述内部状态机制。
 
 ### MCP tools
 
@@ -75,9 +76,9 @@ Experiment Mode 必须在进入时声明 title、question、intent 和 planned d
 ### Read-only Subagents
 
 `research-explorer` 和 `research-reviewer` 是 Plugin 自带的只读 workers；Claude 内置
-`Explore` 也作为 compatibility worker。它们获得 parent 当前 Work Mode 的不可变 lease，
-只允许 Read、Grep、Glob 及受控的只读查询。Subagent 不能调用 lifecycle MCP tools、修改
-文件、运行 shell/experiment 或继续 dispatch Agent。
+`Explore` 也可以使用。它们直接处理 parent 给出的具体读取任务，只允许 Read、Grep、Glob
+及受控的只读查询。Subagent 不能调用状态变更 MCP tools、修改文件、运行 shell/experiment
+或继续 dispatch Agent。
 
 Work Mode 和 Experiment Context 始终由 parent session 持有。Agent dispatch 先写入独立的
 pending record，`SubagentStart` 或首个带 agent identity 的 tool hook 再将其绑定为 lease。
@@ -89,13 +90,13 @@ snapshot。
 
 `hooks/hooks.json` 注册：
 
-- `SessionStart`：初始化 session state，并注入 Plugin 状态；
+- `SessionStart`：初始化 session state；启用时注入一次简短模式提示；
 - `SessionEnd`：将 snapshot 标记为 inactive，避免无 Plugin session 显示过期状态；
-- `UserPromptSubmit`：记录当前用户请求、重置 round counters，并注入最新 policy；
-- `PreToolUse`：区分 parent/subagent、运行 Governor 或 lease gate，并再次注入 policy；
-- `PostToolUse`：记录 artifacts，并清理已完成 Agent dispatch；
+- `UserPromptSubmit`：记录当前用户请求、重置 round counters，并注入一次当前模式提示；
+- `PreToolUse`：区分 parent/subagent 并静默运行 Governor 或只读 gate；成功时不重复注入提示，拒绝时仅返回具体原因；
+- `PostToolUse`：静默记录 artifacts；Agent 成功返回时保留尚待 `SubagentStart` 领取的 dispatch；
 - `PostToolUseFailure`：清理失败的 Agent dispatch；
-- `SubagentStart`：绑定 dispatch、注入只读 lease；
+- `SubagentStart`：绑定 dispatch，并注入一次具体任务和只读说明；
 - `SubagentStop`：关闭 lease，使 parent lifecycle 可以继续。
 
 Governor 因此不只存在于 prompt 中。Brainstorming 和 Exploration 的写入会被实际拒绝；
@@ -137,9 +138,9 @@ Status Line 从共享 `ResearchCoreSnapshot` 读取，并以 Terminal Rail 形�
   ╰─ ◇ research  off
   ╰─ ◇ research  normal  ·  2 actions  ·  1 output
   ╰─ ◇ research  brainstorming  ·  read only
-  ╰─ ◇ research  exploration  ·  blueprint
+  ╰─ ◇ research  exploration  ·  read only
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
-  ╰─ ◇ research  exploration  ·  blueprint  ·  2 agents
+  ╰─ ◇ research  exploration  ·  read only  ·  2 agents
   ╰─ ◆ research  checkpoint  ·  2 results
 ```
 
@@ -239,7 +240,7 @@ enable
 
 - Pi 图片、表格和 widget 体验的 Claude 等价实现；
 - Bash 生成文件的完整实时 Artifact Radar；
-- 专用 explorer/researcher subagent；
+- 可运行 empirical work 的 research subagent；
 - marketplace 发布与自动升级；
 - 同一 worktree 的并发 Claude session isolation。
 
@@ -251,7 +252,7 @@ checkpoint 语义。
 1. 将剩余 Pi checkpoint schema duplication 收敛到共享 schema 描述，同时保留 Pi render。
 2. 将 Artifact Radar 的文件变化采集与 preview 完全分离，为 Claude PostToolUse/monitor
    adapter 提供增量扫描。
-3. 增加可选的 read-only explorer subagent，但禁止 subagent 持有或修改全局 Research
+3. 根据实际研究任务评估 empirical research subagent，同时继续由主 session 保存 Research
    State。
 4. 在 Claude 提供稳定 session identity 后，将 state store 升级为并发安全的 per-session
    storage。

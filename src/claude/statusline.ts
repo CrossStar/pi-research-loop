@@ -97,7 +97,7 @@ function modeDetails(snapshot: ResearchCoreSnapshot): string[] {
     case "brainstorming":
       return ["read only"];
     case "exploration":
-      return ["blueprint"];
+      return ["read only"];
     case "experiment":
       return [
         snapshot.state.experiment?.intent.replace(/-/g, " ") ?? "experiment",

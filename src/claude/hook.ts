@@ -51,8 +51,8 @@ async function main(): Promise<void> {
   if (event === "SessionStart") {
     const core = await store.beginSession(sessionId);
     const statusLineNotice = await ensureStatusLine();
-    const context = [core.policy() ?? offContext(), statusLineNotice].filter(Boolean).join("\n\n");
-    emitContext(event, context, statusLineNotice);
+    const context = [core.policy(), statusLineNotice].filter(Boolean).join("\n\n");
+    if (context) emitContext(event, context, statusLineNotice);
     return;
   }
 
@@ -65,8 +65,8 @@ async function main(): Promise<void> {
     const lease = await claimLease(store, input, agentId);
     const decision = lease
       ? evaluateSubagentTool(lease, input.tool_name ?? "")
-      : { block: true, reason: "Research Subagent has no active parent-owned lease." };
-    emitToolDecision(decision, lease ? subagentPolicy(lease) : undefined);
+      : { block: true, reason: "This research subagent is not linked to an active read-only task." };
+    emitToolDecision(decision);
     return;
   }
 
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     if (isLifecycleTool(toolName) && await store.activeSubagentCount(sessionId) > 0) {
       decision = {
         block: true,
-        reason: "Wait for all active Research Subagents to finish before changing the parent lifecycle.",
+        reason: "Wait for the active research subagents to finish before changing Research Loop state.",
       };
     } else {
       decision = core.evaluateToolCall(toolName, input.tool_input ?? {});
@@ -109,15 +109,19 @@ async function main(): Promise<void> {
     }
 
     await store.saveCore(core, sessionId);
-    emitToolDecision(decision, core.policy());
+    emitToolDecision(decision);
     return;
   }
 
-  if (event === "PostToolUse" || event === "PostToolUseFailure") {
+  if (event === "PostToolUseFailure") {
     if (isAgentTool(input.tool_name) && input.tool_use_id) {
       await store.removeSubagentDispatch(input.tool_use_id);
     }
-    if (event === "PostToolUse") await indexParentArtifact(store, core, input, sessionId);
+    return;
+  }
+
+  if (event === "PostToolUse") {
+    await indexParentArtifact(store, core, input, sessionId);
   }
 }
 
@@ -157,23 +161,17 @@ async function indexParentArtifact(
   if (!artifact) return;
   core.upsertArtifact(artifact);
   await store.saveCore(core, sessionId);
-  emitContext("PostToolUse", `Artifact Radar indexed ${artifact.kind}: ${artifact.path}`);
 }
 
-function emitToolDecision(decision: ToolGateDecision | undefined, policy?: string): void {
-  if (decision?.block) {
-    process.stdout.write(`${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: decision.reason ?? "Research governor blocked this tool call.",
-        ...(policy ? { additionalContext: policy } : {}),
-      },
-      systemMessage: decision.reason ?? "Research governor blocked this tool call.",
-    })}\n`);
-  } else if (policy) {
-    emitContext("PreToolUse", policy);
-  }
+function emitToolDecision(decision: ToolGateDecision | undefined): void {
+  if (!decision?.block) return;
+  process.stdout.write(`${JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: decision.reason ?? "Research Loop blocked this tool call.",
+    },
+  })}\n`);
 }
 
 function emitContext(event: string, additionalContext: string, systemMessage?: string): void {
@@ -195,14 +193,6 @@ async function ensureStatusLine(): Promise<string | undefined> {
   } catch {
     return undefined;
   }
-}
-
-function offContext(): string {
-  return [
-    "[RESEARCH LOOP | OFF]",
-    "The research-loop Claude Code Plugin is loaded, but its research governor is disabled.",
-    "Use the research-loop skill or research_set_enabled MCP tool to enable it for this session.",
-  ].join("\n");
 }
 
 function extractWrittenPath(toolName: string | undefined, input: Record<string, unknown> | undefined): string | undefined {

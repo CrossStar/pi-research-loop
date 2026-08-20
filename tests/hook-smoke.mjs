@@ -14,7 +14,7 @@ try {
     cwd: project,
     hook_event_name: "SessionStart",
   });
-  assert.match(started.hookSpecificOutput.additionalContext, /RESEARCH LOOP \| OFF/);
+  assert.match(started.hookSpecificOutput.additionalContext, /Status Line was installed or migrated/);
   assert.match(started.systemMessage, /Status Line was installed or migrated/);
 
   const store = new ClaudeStateStore(project);
@@ -29,7 +29,16 @@ try {
     hook_event_name: "UserPromptSubmit",
     prompt: "Compare candidate approaches",
   });
-  assert.match(prompt.hookSpecificOutput.additionalContext, /BRAINSTORMING MODE/);
+  assert.match(prompt.hookSpecificOutput.additionalContext, /RESEARCH LOOP: BRAINSTORMING/);
+  assert.match(prompt.hookSpecificOutput.additionalContext, /Objective: Choose a direction/);
+
+  await runHook({
+    session_id: sessionId,
+    cwd: project,
+    hook_event_name: "PreToolUse",
+    tool_name: "Read",
+    tool_input: { file_path: "README.md" },
+  }, false);
 
   const denied = await runHook({
     session_id: sessionId,
@@ -39,7 +48,8 @@ try {
     tool_input: { file_path: "experiment.py", content: "print('run')" },
   });
   assert.equal(denied.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(denied.hookSpecificOutput.permissionDecisionReason, /read-oriented/);
+  assert.ok(denied.hookSpecificOutput.permissionDecisionReason);
+  assert.equal(denied.hookSpecificOutput.additionalContext, undefined);
 
   await runHook({
     session_id: sessionId,

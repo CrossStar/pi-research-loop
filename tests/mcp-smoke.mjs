@@ -77,7 +77,7 @@ try {
     tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
     tool_use_id: "mcp-mode-transition",
     tool_input: { mode: "experiment" },
-  });
+  }, false);
 
   const entered = await client.callTool({
     name: "research_mode",
@@ -91,7 +91,7 @@ try {
     },
   });
   assert.equal(entered.isError, undefined);
-  const agentAfterTransition = await runHook({
+  await runHook({
     session_id: "mcp-smoke-session",
     cwd: project,
     hook_event_name: "PreToolUse",
@@ -99,11 +99,10 @@ try {
     tool_use_id: "mcp-review-dispatch",
     tool_input: {
       subagent_type: "research-reviewer",
-      description: "Review experiment scope",
-      prompt: "Review the declared scope without modifying files.",
+      description: "Review experiment settings",
+      prompt: "Compare the declared experiment settings with the available local references.",
     },
-  });
-  assert.equal(agentAfterTransition.hookSpecificOutput.permissionDecision, undefined);
+  }, false);
   await runHook({
     session_id: "mcp-smoke-session",
     cwd: project,

@@ -115,7 +115,7 @@ server.registerTool(
     core.setEnabled(enabled);
     return finishLifecycle(
       core,
-      textResult(`${core.projectStatus().text}\n\n${core.policy() ?? "Research policy injection is disabled."}`),
+      textResult(`${core.projectStatus().text}\n\n${core.policy() ?? "Research Loop is off."}`),
     );
   },
 );
@@ -125,7 +125,7 @@ server.registerTool(
   {
     title: "Select Research Work Mode",
     description:
-      "Select the dominant work contract for the main Claude session. Experiment Mode requires a complete experiment declaration and must later end through checkpoint or abort.",
+      "Set the current mode for the main Claude session. Experiment Mode requires title, question, intent, and plannedDataScope and must end through checkpoint or abort.",
     inputSchema: {
       mode: modeSchema,
       objective: z.string().min(1),
@@ -158,7 +158,7 @@ server.registerTool(
   "research_state",
   {
     title: "Read Research Loop state",
-    description: "Return the current session research state, active experiment context, artifacts, and policy.",
+    description: "Return the saved Research Loop mode, active experiment, artifacts, and current guidance.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -169,7 +169,7 @@ server.registerTool(
       core.projectStatus().text,
       `Active Research Subagents: ${activeSubagents}`,
       JSON.stringify(core.researchState, null, 2),
-      core.policy() ?? "Research policy injection is disabled.",
+      core.policy() ?? "Research Loop is off.",
     ].join("\n\n"));
   },
 );
@@ -232,7 +232,7 @@ server.registerTool(
   {
     title: "Reach Research Checkpoint",
     description:
-      "End an active Experiment Mode with a structured evidence report. Include every completed experiment, actual scope, source coverage, deviations, observations, analysis, uncertainty, and next decision.",
+      "Record the completed runs and their results, end the active Experiment, and return Research Loop to Normal Mode. Reproduction entries must include their reference sources and any changed settings.",
     inputSchema: {
       title: z.string().min(1),
       researchQuestion: z.string().min(1),
@@ -288,7 +288,7 @@ server.registerTool(
 async function activeSubagentError(): Promise<string | undefined> {
   const count = await store.activeSubagentCount();
   return count > 0
-    ? `Wait for ${count} active Research Subagent${count === 1 ? "" : "s"} to finish before changing the parent lifecycle.`
+    ? `Wait for ${count} active research subagent${count === 1 ? "" : "s"} to finish before changing Research Loop state.`
     : undefined;
 }
 

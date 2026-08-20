@@ -144,10 +144,10 @@ export function registerResearchCheckpoint(
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "Use only after the user's research request caused you to conduct at least one empirical experiment and you judge that the resulting evidence warrants returning control. For every reproduction, document consultation of the official paper, repository README, and relevant GitHub issues, including conflicts or search limitations. Also disclose scientific intent, actual data scope, and all protocol deviations. Call this alone as the final tool action.",
-    promptSnippet: "End a research interval with a multi-experiment report and return control",
+      "Record at least one completed empirical run, end the active Experiment, and return Research Loop to Normal Mode. Reproduction entries must include the official paper, matching repository README, relevant issue status, actual settings, and any changes from the reference. Call this alone as the final tool action.",
+    promptSnippet: "Record completed experiment results and return to Normal Mode",
     promptGuidelines: [
-      "For reproduction work, consult and reconcile three sources before execution: the official paper (including appendix/supplement), the official repository README at the relevant revision, and relevant open/closed GitHub issues with maintainer discussion. Record exact references and source-specific guidance; disclose conflicts and missing/inaccessible issue evidence. Also classify experiment intent, state actual data scope, and list every protocol deviation with prior approval status.",
+      "For a reproduction, consult the official paper (including appendix or supplement), the README for the matching repository revision, and relevant open or closed issues before execution. Record what each source contributed, the settings actually used, and every approved or unapproved change from the reference.",
     ],
     parameters: Type.Object({
       title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
