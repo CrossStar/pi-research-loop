@@ -2,6 +2,15 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.4.0 - 2026-08-21
+
+### Checkpoint presentation
+
+- Start a session-scoped, localhost-only Pi checkpoint server on the first available port from a configurable base and append the rendered report URL to every checkpoint output.
+- Render reports from the approved LaTeX-like HTML layout with formulas, tables, images, progressive experiment details, and an inspectable large-JSON viewer.
+- Keep current-session checkpoint history in memory and clear it when the Pi session shuts down.
+- Prefer Chafa for Pi terminal image previews, with Pi's native terminal-image protocols as the automatic fallback.
+
 ## 0.3.1 - 2026-08-20
 
 ### User decisions

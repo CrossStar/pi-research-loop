@@ -1,19 +1,22 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Container, Image, Key, matchesKey, Text } from "@earendil-works/pi-tui";
+import { Container, Key, matchesKey, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { ArtifactRadar, formatSize, loadArtifactPreview } from "./artifacts.js";
 import { registerResearchCheckpoint } from "./checkpoint.js";
+import { CheckpointReportServer } from "./checkpoint-server.js";
 import {
   POLICY_MESSAGE,
   ResearchRuntime,
   shouldAbortForCancelledQuestionnaire,
 } from "./runtime.js";
+import { createTerminalImage } from "./terminal-image.js";
 
 const ASK_USER_BLOCKED_EVENT = "rpiv:ask-user:blocked";
 
 export default function researchLoop(pi: ExtensionAPI): void {
   const runtime = new ResearchRuntime(pi);
+  const checkpointServer = new CheckpointReportServer();
   let radar: ArtifactRadar | undefined;
   let activeContext: ExtensionContext | undefined;
 
@@ -21,6 +24,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   registerResearchCheckpoint(pi, {
     getArtifacts,
+    publish: (details) => checkpointServer.publish(details),
     onReached: (resultCount, ctx) => runtime.reachCheckpoint(resultCount, ctx),
   });
 
@@ -145,7 +149,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
           container.addChild(new Text(preview.text, 0, 1));
           if (preview.image) {
             container.addChild(
-              new Image(
+              createTerminalImage(
                 preview.image.data,
                 preview.image.mimeType,
                 { fallbackColor: (text) => theme.fg("muted", text) },
@@ -178,6 +182,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
     runtime.startSession(ctx);
+    void checkpointServer.start().catch((error) => {
+      ctx.ui.notify(`Checkpoint web server unavailable: ${String(error)}`, "warning");
+    });
 
     radar?.stop();
     radar = new ArtifactRadar(ctx.cwd, runtime.artifacts, (artifact, isNew) => {
@@ -198,11 +205,12 @@ export default function researchLoop(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
+  pi.on("session_shutdown", async (_event, ctx) => {
     runtime.clearStatus(ctx);
     radar?.stop();
     radar = undefined;
     activeContext = undefined;
+    await checkpointServer.stop();
   });
 
   pi.on("before_agent_start", (event, ctx) => {

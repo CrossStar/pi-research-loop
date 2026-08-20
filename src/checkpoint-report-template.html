@@ -1,0 +1,2022 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Research Checkpoint — Web Template</title>
+  <meta name="color-scheme" content="light" />
+  <!-- 审美模板使用 CDN 版 MathJax。正式接入本地服务时应改为由插件本地提供静态资源。 -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["$", "$"], ["\\(", "\\)"]],
+        displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+        processEscapes: true
+      },
+      svg: { fontCache: "global" },
+      options: { skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"] }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+  <style>
+    :root {
+      --paper: #fcfcfa;
+      --paper-soft: #f5f5f1;
+      --ink: #202124;
+      --ink-strong: #111214;
+      --muted: #666a70;
+      --faint: #91959a;
+      --rule: #d8d8d2;
+      --rule-strong: #a9aaa5;
+      --accent: #772936;
+      --accent-soft: #f6eff0;
+      --green: #315f48;
+      --amber: #8a5d21;
+      --red: #a1373e;
+      --purple: #665080;
+      --cyan: #306477;
+      --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      --font-body: Charter, "Bitstream Charter", Georgia, "Times New Roman", serif;
+      --font-ui: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); color-scheme: light; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.78 var(--font-body);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration: underline; }
+    ::selection { color: var(--ink-strong); background: #eadcdf; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    /* The page reads like a paper. The right rail is the signature element: a live reviewer margin. */
+    .app-shell {
+      width: min(1440px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 940px) 260px;
+      gap: clamp(44px, 5vw, 76px);
+      padding: 0 clamp(22px, 4vw, 58px);
+    }
+
+    .main {
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
+      padding: 48px 0 96px;
+    }
+    .report { width: 100%; margin: 0; }
+
+    .sidebar {
+      grid-column: 2;
+      grid-row: 1;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      align-self: start;
+      overflow: auto;
+      padding: 52px 0 60px 25px;
+      border-left: 1px solid var(--rule);
+      background: transparent;
+      font-family: var(--font-ui);
+      scrollbar-width: thin;
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 34px;
+      padding-bottom: 21px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      background: transparent;
+      box-shadow: none;
+      font: 700 12px/1 var(--font-ui);
+      letter-spacing: .04em;
+    }
+    .brand-title { color: var(--ink-strong); font-size: 12px; font-weight: 700; letter-spacing: .035em; }
+    .brand-subtitle { margin-top: 2px; color: var(--faint); font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .16em; }
+
+    .side-label {
+      margin: 24px 0 10px;
+      color: var(--faint);
+      font-size: 9px;
+      font-weight: 750;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+    .side-nav { position: relative; display: grid; gap: 0; }
+    .side-nav a {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: baseline;
+      gap: 10px;
+      padding: 6px 0 6px 14px;
+      color: #73767b;
+      border-radius: 0;
+      background: transparent;
+      font-size: 11px;
+      line-height: 1.35;
+      text-decoration: none;
+      transition: color 120ms ease, transform 120ms ease;
+    }
+    .side-nav a::before {
+      content: "";
+      position: absolute;
+      left: -26px;
+      top: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--rule-strong);
+      transform: translate(-50%, -50%);
+      transition: width 120ms ease, height 120ms ease, background 120ms ease;
+    }
+    .side-nav a:hover { color: var(--ink-strong); background: transparent; text-decoration: none; transform: translateX(2px); }
+    .side-nav a.active { color: var(--accent); font-weight: 700; }
+    .side-nav a.active::before { width: 9px; height: 9px; background: var(--accent); }
+    .side-nav .count { color: var(--faint); font: 10px var(--font-mono); }
+
+    .session-card {
+      margin-top: 34px;
+      padding: 18px 0 0;
+      border: 0;
+      border-top: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+      font-family: var(--font-ui);
+    }
+    .session-card strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 10px; font-weight: 650; }
+    .session-card span { color: var(--faint); font-size: 9px; line-height: 1.5; }
+    .live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--green); box-shadow: none; }
+
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 14px;
+      margin: 0 0 22px;
+      font-family: var(--font-ui);
+    }
+    .icon-button, .json-action {
+      padding: 5px 0;
+      color: var(--muted);
+      border: 0;
+      border-bottom: 1px solid var(--rule-strong);
+      border-radius: 0;
+      background: transparent;
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: .04em;
+    }
+    .icon-button:hover, .json-action:hover { color: var(--accent); background: transparent; border-bottom-color: var(--accent); }
+
+    .hero {
+      position: relative;
+      overflow: visible;
+      padding: 42px 0 38px;
+      border: 0;
+      border-top: 3px double var(--ink-strong);
+      border-bottom: 1px solid var(--rule-strong);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .hero::after { display: none; }
+    .eyebrow {
+      display: block;
+      margin: 0 0 15px;
+      color: var(--accent);
+      font: 700 10px/1.3 var(--font-ui);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: "Research checkpoint · "; color: var(--faint); }
+    h1 {
+      max-width: 840px;
+      margin: 0;
+      color: var(--ink-strong);
+      font: 600 clamp(38px, 5.1vw, 66px)/1.03 var(--font-display);
+      letter-spacing: -.035em;
+      text-wrap: balance;
+    }
+    .hero-question {
+      max-width: 800px;
+      margin: 26px 0 0;
+      padding-left: 18px;
+      color: #494c50;
+      border-left: 2px solid var(--accent);
+      font-size: 18px;
+      line-height: 1.68;
+      font-style: italic;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 18px;
+      margin-top: 27px;
+      font-family: var(--font-ui);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 0;
+      padding: 0;
+      color: var(--muted);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font: 700 9px/1.5 var(--font-ui);
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .badge::before { content: "·"; margin-right: 7px; color: var(--rule-strong); }
+    .hero-meta .badge:first-child::before { content: none; }
+    .badge.intent-reproduction, .badge.success { color: var(--green); }
+    .badge.intent-diagnostic { color: var(--amber); }
+    .badge.intent-exploratory { color: var(--cyan); }
+    .badge.intent-ablation { color: var(--purple); }
+    .badge.danger { color: var(--red); }
+
+    .section {
+      margin-top: 68px;
+      scroll-margin-top: 28px;
+    }
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 18px;
+      margin-bottom: 24px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--ink-strong);
+    }
+    .section-kicker {
+      margin-bottom: 5px;
+      color: var(--accent);
+      font: 700 9px/1.3 var(--font-ui);
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+    h2 {
+      margin: 0;
+      color: var(--ink-strong);
+      font: 600 30px/1.16 var(--font-display);
+      letter-spacing: -.018em;
+    }
+    h3 { margin: 0; color: var(--ink-strong); font: 600 18px/1.35 var(--font-display); }
+    h4 {
+      margin: 0 0 7px;
+      color: var(--muted);
+      font: 700 9px/1.35 var(--font-ui);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .rich-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .rich-text.strong { color: var(--ink-strong); font-size: 18px; line-height: 1.72; }
+
+    /* Abstract-like summary: hierarchy from typography and rules, never panels. */
+    .summary-grid { display: block; }
+    .summary-card {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 24px;
+      min-width: 0;
+      padding: 18px 0;
+      border: 0;
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+    }
+    .summary-card.wide { grid-column: auto; }
+    .summary-card.conclusion {
+      padding-top: 2px;
+      padding-bottom: 26px;
+      border-top: 0;
+      border-bottom: 3px double var(--ink-strong);
+      background: transparent;
+    }
+    .summary-card.next { border-color: var(--rule); background: transparent; }
+    .summary-card h4 { margin: 5px 0 0; }
+
+    .warning-list { display: grid; gap: 0; }
+    .warning-card {
+      position: relative;
+      padding: 18px 0 18px 18px;
+      border: 0;
+      border-bottom: 1px solid var(--rule);
+      border-left: 2px solid var(--amber);
+      border-radius: 0;
+      background: transparent;
+    }
+    .warning-card.unapproved { border-left-color: var(--red); background: transparent; }
+    .warning-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+      color: var(--ink-strong);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .warning-grid {
+      display: grid;
+      grid-template-columns: minmax(120px,.65fr) minmax(140px,.8fr) minmax(220px,1.55fr);
+      gap: 20px;
+      color: var(--muted);
+      font: 11px/1.55 var(--font-ui);
+    }
+    .warning-grid b { display: block; margin-bottom: 3px; color: var(--faint); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+
+    /* Booktabs-inspired research tables. */
+    .table-wrap {
+      overflow: auto;
+      margin: 14px 0 34px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border-top: 1.5px solid var(--ink-strong);
+      border-bottom: 1.5px solid var(--ink-strong);
+      font: 12px/1.5 var(--font-ui);
+      font-variant-numeric: tabular-nums;
+    }
+    th {
+      position: static;
+      padding: 10px 12px;
+      color: var(--ink-strong);
+      background: transparent;
+      border-bottom: 1px solid var(--rule-strong);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid #e7e7e2; vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #faf8f7; }
+    .numeric { color: var(--ink-strong); font-family: var(--font-mono); white-space: nowrap; }
+    .delta-positive { color: var(--green); }
+    .delta-negative { color: var(--red); }
+
+    .experiment-list { display: block; }
+    details.experiment {
+      overflow: visible;
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--rule-strong);
+      border-radius: 0;
+      background: transparent;
+    }
+    details.experiment:last-child { border-bottom: 1px solid var(--rule-strong); }
+    details.experiment[open] { border-color: var(--rule-strong); box-shadow: none; }
+    details.experiment > summary {
+      display: grid;
+      grid-template-columns: 42px minmax(0,1fr) auto 20px;
+      align-items: baseline;
+      gap: 12px;
+      padding: 19px 0;
+      cursor: pointer;
+      list-style: none;
+      font-family: var(--font-ui);
+    }
+    details.experiment > summary::-webkit-details-marker { display: none; }
+    details.experiment > summary::after {
+      content: "+";
+      grid-column: 4;
+      color: var(--faint);
+      font-size: 16px;
+      font-weight: 300;
+    }
+    details.experiment[open] > summary::after { content: "−"; }
+    .experiment-index {
+      display: block;
+      width: auto;
+      height: auto;
+      color: var(--accent);
+      background: transparent;
+      border-radius: 0;
+      font: 700 11px var(--font-mono);
+    }
+    .experiment-title { color: var(--ink-strong); font-size: 13px; font-weight: 700; }
+    .experiment-subtitle { margin-top: 4px; color: var(--faint); font-size: 10px; line-height: 1.45; }
+    .experiment-body { padding: 2px 0 36px 54px; border-top: 0; }
+
+    .narrative-grid { display: block; margin-top: 4px; }
+    .narrative {
+      display: grid;
+      grid-template-columns: 122px minmax(0,1fr);
+      gap: 22px;
+      padding: 12px 0;
+      border: 0;
+      border-bottom: 1px solid #e9e9e5;
+      border-radius: 0;
+      background: transparent;
+    }
+    .narrative.observation, .narrative.analysis { border-left: 0; }
+    .narrative.analysis { padding-bottom: 18px; border-bottom-color: var(--rule-strong); }
+    .narrative h4 { margin-top: 4px; }
+
+    .subdetails {
+      margin-top: 20px;
+      border: 0;
+      border-top: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+    }
+    .subdetails > summary {
+      padding: 10px 0;
+      color: var(--muted);
+      cursor: pointer;
+      font: 700 10px/1.4 var(--font-ui);
+      letter-spacing: .035em;
+      list-style-position: inside;
+    }
+    .subdetails-content { padding: 8px 0 10px; }
+
+    .definition-grid {
+      display: grid;
+      grid-template-columns: minmax(135px,.7fr) minmax(160px,1fr) minmax(220px,1.5fr);
+      gap: 0;
+      overflow: visible;
+      border: 0;
+      border-top: 1px solid var(--rule-strong);
+      border-bottom: 1px solid var(--rule-strong);
+      border-radius: 0;
+      background: transparent;
+      font-family: var(--font-ui);
+    }
+    .definition-grid > div { padding: 9px 10px; border-bottom: 1px solid #e8e8e3; background: transparent; overflow-wrap: anywhere; }
+    .definition-grid > div:nth-last-child(-n+3) { border-bottom: 0; }
+    .definition-grid .label { color: var(--muted); font-size: 9px; }
+    .definition-grid .value { color: var(--ink-strong); font-family: var(--font-mono); font-size: 10px; }
+    .definition-grid .why { color: var(--muted); font-size: 10px; }
+
+    .source-list, .artifact-grid { display: block; }
+    .source-card, .artifact-card {
+      min-width: 0;
+      padding: 16px 0;
+      border: 0;
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+    }
+    .source-card:first-child, .artifact-card:first-child { border-top: 1px solid var(--rule); }
+    .source-head, .artifact-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .source-reference, .artifact-path { color: var(--accent); font: 10px/1.55 var(--font-mono); overflow-wrap: anywhere; }
+    .source-summary, .artifact-description { max-width: 760px; color: var(--muted); font: 11px/1.62 var(--font-ui); }
+    .takeaway {
+      margin-top: 10px;
+      padding: 0 0 0 12px;
+      color: var(--green);
+      border-left: 2px solid var(--green);
+      border-radius: 0;
+      background: transparent;
+      font: 11px/1.6 var(--font-ui);
+    }
+
+    .image-card { grid-column: auto; }
+    .image-frame { position: relative; overflow: hidden; margin-top: 18px; border: 0; border-radius: 0; background: #fff; cursor: zoom-in; }
+    .image-frame img { display: block; width: 100%; max-height: 560px; object-fit: contain; border: 1px solid var(--rule); }
+    .image-caption { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--faint); background: transparent; border-bottom: 1px solid var(--rule); font: 9px/1.45 var(--font-ui); }
+
+    .formula-card { padding: 0; border: 0; border-radius: 0; background: transparent; }
+    .formula-display {
+      margin: 22px 0;
+      padding: 20px 16px;
+      overflow-x: auto;
+      color: var(--ink-strong);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      background: #fafaf7;
+      text-align: center;
+    }
+
+    /* JSON is a tool, so it gets a bounded utility surface; not a content card. */
+    .json-viewer { margin-top: 18px; overflow: hidden; border: 1px solid #d7d7d2; border-radius: 2px; background: #f8f8f5; color: #323438; font-family: var(--font-mono); }
+    .json-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid #d7d7d2; background: #f0f0ec; }
+    .json-title { margin-right: auto; color: #4e5156; font: 700 10px var(--font-mono); }
+    .json-stat { padding: 0; color: #888b90; border: 0; border-radius: 0; font: 9px var(--font-mono); }
+    .json-action { padding: 3px 0; color: #666a70; border-bottom-color: #bfc0bc; font: 9px var(--font-ui); }
+    .json-action.active { color: var(--accent); border-color: var(--accent); background: transparent; }
+    .json-search { width: min(220px,100%); padding: 5px 7px; color: #2b2d30; background: #fff; border: 1px solid #cacbc7; border-radius: 2px; outline: none; font: 10px var(--font-mono); }
+    .json-search:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #eadcdf; }
+    .json-content { max-height: 520px; overflow: auto; padding: 10px 12px 14px; font: 10px/1.7 var(--font-mono); }
+    .json-tree details { margin-left: 16px; }
+    .json-tree > details { margin-left: 0; }
+    .json-tree summary { color: #676a6f; cursor: pointer; list-style-position: outside; }
+    .json-key { color: #225d72; }
+    .json-string { color: #376b48; }
+    .json-number { color: #9a531d; }
+    .json-boolean { color: #695184; }
+    .json-null { color: #a63b46; font-style: italic; }
+    .json-shape { color: #929599; }
+    .json-primitive { margin-left: 16px; overflow-wrap: anywhere; }
+    .json-raw { min-width: max-content; }
+    .json-line { display: grid; grid-template-columns: 42px minmax(0,1fr); min-height: 19px; }
+    .json-line-number { padding-right: 11px; color: #aaa; text-align: right; user-select: none; }
+    .json-line code { white-space: pre; }
+    mark { color: #222; background: #efe1a6; border-radius: 0; }
+    .json-empty { padding: 26px; color: #999; text-align: center; }
+
+    dialog { width: min(1100px,calc(100vw - 40px)); padding: 0; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--paper); box-shadow: 0 24px 70px rgba(0,0,0,.16); }
+    dialog::backdrop { background: rgba(25,25,22,.62); backdrop-filter: blur(2px); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; color: var(--ink); border-bottom: 1px solid var(--rule); font-family: var(--font-ui); }
+    .modal-image { display: block; width: 100%; max-height: calc(100vh - 120px); object-fit: contain; background: #fff; }
+
+    .footer { margin-top: 72px; padding: 20px 0 0; color: var(--faint); border-top: 3px double var(--ink-strong); font: 9px/1.6 var(--font-ui); letter-spacing: .035em; }
+
+    @media (max-width: 1120px) {
+      .app-shell { grid-template-columns: minmax(0,1fr) 220px; gap: 38px; padding-inline: 28px; }
+      .sidebar { padding-left: 20px; }
+      .side-nav a::before { left: -21px; }
+      .summary-card { grid-template-columns: 160px minmax(0,1fr); }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell { display: flex; flex-direction: column; gap: 0; padding: 0 22px; }
+      .sidebar {
+        order: 0;
+        position: relative;
+        width: 100%;
+        height: auto;
+        padding: 26px 0 18px;
+        border-left: 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .main { order: 1; padding-top: 30px; }
+      .brand { margin-bottom: 12px; padding-bottom: 12px; }
+      .side-label, .experiment-nav, #experiment-nav, .session-card { display: none; }
+      #side-nav { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 4px; }
+      .side-nav a { flex: 0 0 auto; padding: 4px 0; font-size: 10px; }
+      .side-nav a::before { display: none; }
+      .summary-card { grid-template-columns: 145px minmax(0,1fr); }
+      .experiment-body { padding-left: 0; }
+    }
+
+    @media (max-width: 640px) {
+      .app-shell { padding-inline: 15px; }
+      body { font-size: 15px; }
+      h1 { font-size: clamp(34px, 11vw, 48px); }
+      .hero { padding-top: 30px; }
+      .hero-question { font-size: 16px; }
+      .section { margin-top: 54px; }
+      .section-heading { grid-template-columns: 1fr; gap: 8px; }
+      .section-heading > .badge { display: none; }
+      h2 { font-size: 27px; }
+      .summary-card { display: block; }
+      .summary-card h4 { margin: 0 0 7px; }
+      .warning-grid, .definition-grid { grid-template-columns: 1fr; }
+      .definition-grid > div { border-bottom: 1px solid #e8e8e3; }
+      .narrative { display: block; }
+      .narrative h4 { margin-bottom: 6px; }
+      details.experiment > summary { grid-template-columns: 34px minmax(0,1fr); }
+      details.experiment > summary .badge { grid-column: 2; margin-top: 5px; }
+      details.experiment > summary::after { grid-column: 2; justify-self: end; grid-row: 1; }
+      .json-search { order: 10; width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+    }
+
+    @media print {
+      .sidebar, .toolbar, .json-toolbar, .footer { display: none !important; }
+      .app-shell { display: block; width: auto; padding: 0; }
+      .main { padding: 0; }
+      body { background: #fff; color: #111; font-size: 11pt; }
+      .hero { padding-top: 18pt; }
+      .section { margin-top: 28pt; }
+      details { break-inside: avoid; }
+      details.experiment > .experiment-body, .subdetails > .subdetails-content { display: block !important; }
+    }
+  </style>
+
+  <style id="typography-readability-pass">
+    /* Typography pass — tuned for sustained academic reading rather than dense dashboard scanning. */
+    :root {
+      --font-display: Charter, "Bitstream Charter", "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, Georgia, serif;
+      --font-body: Charter, "Bitstream Charter", "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, Georgia, serif;
+      --font-ui: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      --font-mono: "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    }
+
+    body {
+      font-size: 17.5px;
+      line-height: 1.82;
+      letter-spacing: .002em;
+    }
+
+    /* Right margin / contents */
+    .brand-title { font-size: 14px; letter-spacing: .02em; }
+    .brand-subtitle { font-size: 10.5px; letter-spacing: .13em; }
+    .side-label { font-size: 10.5px; letter-spacing: .14em; }
+    .side-nav a { padding-block: 7px; font-size: 12.5px; line-height: 1.42; }
+    .side-nav .count { font-size: 11px; }
+    .session-card strong { font-size: 11.5px; }
+    .session-card span { font-size: 10.5px; line-height: 1.55; }
+
+    /* Controls and metadata should be secondary, but never microscopic. */
+    .icon-button, .json-action { font-size: 11.5px; }
+    .eyebrow { font-size: 11.5px; letter-spacing: .15em; }
+    .badge { font-size: 10.5px; line-height: 1.55; letter-spacing: .075em; }
+
+    /* Paper hierarchy */
+    h1 {
+      max-width: 880px;
+      font-size: clamp(46px, 5.2vw, 70px);
+      line-height: 1.06;
+      letter-spacing: -.028em;
+      font-weight: 650;
+    }
+    .hero-question {
+      max-width: 830px;
+      font-size: 19.5px;
+      line-height: 1.72;
+    }
+    .section-kicker { font-size: 10.5px; letter-spacing: .14em; }
+    h2 { font-size: 33px; line-height: 1.18; }
+    h3 { font-size: 21px; line-height: 1.4; }
+    h4 { font-size: 11.5px; line-height: 1.4; letter-spacing: .105em; }
+    .rich-text.strong { font-size: 19px; line-height: 1.78; }
+
+    /* Summary / abstract */
+    .summary-card { grid-template-columns: 205px minmax(0, 1fr); gap: 30px; padding-block: 21px; }
+    .summary-card h4 { padding-top: 3px; }
+
+    /* Scientific integrity and tables */
+    .warning-title { font-size: 14px; line-height: 1.5; }
+    .warning-grid { font-size: 13px; line-height: 1.62; }
+    .warning-grid b { font-size: 10px; letter-spacing: .105em; }
+    table { font-size: 13.5px; line-height: 1.5; }
+    th { padding: 12px 13px; font-size: 10.5px; letter-spacing: .065em; }
+    td { padding: 12px 13px; }
+    .numeric { font-size: 13px; }
+
+    /* Experiments: make the run index and narrative genuinely readable. */
+    details.experiment > summary { padding-block: 17px; }
+    .experiment-index { font-size: 12.5px; }
+    .experiment-title { font-size: 15.5px; line-height: 1.42; }
+    .experiment-subtitle { font-size: 12px; line-height: 1.55; }
+    .narrative { grid-template-columns: 138px minmax(0, 1fr); gap: 28px; padding-block: 15px; }
+    .narrative .rich-text { font-size: 16.5px; line-height: 1.78; }
+    .subdetails > summary { padding-block: 12px; font-size: 11.5px; line-height: 1.5; }
+
+    /* Protocol / parameter tables */
+    .definition-grid { grid-template-columns: minmax(155px,.72fr) minmax(190px,1fr) minmax(240px,1.5fr); }
+    .definition-grid > div { padding: 11px 12px; }
+    .definition-grid .label { font-size: 11px; line-height: 1.55; }
+    .definition-grid .value { font-size: 11.5px; line-height: 1.55; }
+    .definition-grid .why { font-size: 11.5px; line-height: 1.6; }
+
+    /* Sources / artifacts / figures */
+    .source-reference, .artifact-path { font-size: 11.5px; line-height: 1.62; }
+    .source-summary, .artifact-description { font-size: 13px; line-height: 1.68; }
+    .takeaway { font-size: 13px; line-height: 1.68; }
+    .image-caption { font-size: 11px; line-height: 1.55; }
+
+    /* Formulae inherit the larger paper scale. */
+    .formula-display { font-size: 18px; line-height: 1.6; }
+
+    /* JSON remains dense, but must be inspectable without zooming the browser. */
+    .json-toolbar { gap: 10px; padding: 10px 12px; }
+    .json-title { font-size: 11.5px; }
+    .json-stat { font-size: 10.5px; }
+    .json-action { font-size: 10.5px; }
+    .json-search { font-size: 11.5px; padding: 6px 8px; }
+    .json-content { font-size: 11.5px; line-height: 1.72; }
+    .json-line { min-height: 21px; }
+    .footer { font-size: 10.5px; line-height: 1.7; }
+
+    @media (max-width: 1120px) {
+      .summary-card { grid-template-columns: 180px minmax(0, 1fr); }
+    }
+
+    @media (max-width: 900px) {
+      .side-nav a { font-size: 12px; }
+      .summary-card { grid-template-columns: 165px minmax(0, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 16.5px; line-height: 1.78; }
+      h1 { font-size: clamp(38px, 11vw, 52px); }
+      .hero-question { font-size: 18px; }
+      h2 { font-size: 29px; }
+      h3 { font-size: 20px; }
+      .rich-text.strong { font-size: 18px; }
+      .narrative .rich-text { font-size: 16px; }
+      table { font-size: 12.5px; }
+      .definition-grid .label,
+      .definition-grid .value,
+      .definition-grid .why { font-size: 11.5px; }
+      .json-content { font-size: 11px; }
+    }
+
+    @media print {
+      body { font-size: 11.5pt; line-height: 1.62; }
+      h1 { font-size: 29pt; }
+      h2 { font-size: 18pt; }
+      h3 { font-size: 13pt; }
+      .hero-question { font-size: 12pt; }
+      .rich-text.strong { font-size: 12pt; }
+      table { font-size: 9.5pt; }
+    }
+  </style>
+
+
+  <style id="latex-theme-pass">
+    /*
+      LaTeX / article.cls inspired screen theme.
+      The KaTeX fonts are a web-safe Computer Modern descendant and keep the
+      report visually close to TeX output without changing the MathJax logic.
+    */
+    @font-face {
+      font-family: "TeX Main";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_Main-Regular.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "TeX Main";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_Main-Italic.woff2") format("woff2");
+      font-style: italic;
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "TeX Main";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_Main-Bold.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "TeX Sans";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_SansSerif-Regular.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "TeX Sans";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_SansSerif-Bold.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "TeX Typewriter";
+      src: url("https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/KaTeX_Typewriter-Regular.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+
+    :root {
+      --paper: #ffffff;
+      --paper-soft: #fbfbfa;
+      --ink: #191919;
+      --ink-strong: #050505;
+      --muted: #555555;
+      --faint: #777777;
+      --rule: #d6d6d6;
+      --rule-strong: #777777;
+      --accent: #1d4d7a;
+      --accent-soft: #eef4f8;
+      --green: #2f6546;
+      --amber: #79571c;
+      --red: #9a3030;
+      --purple: #5b4775;
+      --cyan: #315d72;
+      --font-display: "TeX Main", "Latin Modern Roman", "Computer Modern Serif", "CMU Serif", "STIX Two Text", "STIX", "STIXGeneral", "Times New Roman", "Noto Serif SC", "Noto Serif CJK SC", SimSun, "Songti SC", STSong, serif;
+      --font-body: "TeX Main", "Latin Modern Roman", "Computer Modern Serif", "CMU Serif", "STIX Two Text", "STIX", "STIXGeneral", "Times New Roman", "Noto Serif SC", "Noto Serif CJK SC", SimSun, "Songti SC", STSong, serif;
+      --font-ui: "TeX Sans", "Latin Modern Sans", "CMU Sans Serif", "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
+      --font-mono: "TeX Typewriter", "Latin Modern Mono", "CMU Typewriter Text", "Courier New", monospace;
+    }
+
+    html { background: #f1f1ef; }
+    body {
+      color: var(--ink);
+      background: #f1f1ef;
+      font-family: var(--font-body);
+      font-size: 18px;
+      line-height: 1.62;
+      letter-spacing: 0;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      font-kerning: normal;
+    }
+
+    a { color: var(--accent); text-decoration-thickness: .06em; text-underline-offset: .14em; }
+    ::selection { background: #dbe8f2; }
+
+    /* Screen = a sheet of paper plus a narrow TeX-like contents margin. */
+    .app-shell {
+      width: min(1250px, calc(100% - 40px));
+      min-height: 100vh;
+      margin: 28px auto 64px;
+      padding: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 820px) 230px;
+      gap: 54px;
+      align-items: start;
+    }
+
+    .main {
+      grid-column: 1;
+      grid-row: 1;
+      padding: 0;
+      min-width: 0;
+    }
+
+    .report {
+      width: 100%;
+      margin: 0;
+      padding: 68px 72px 76px;
+      background: var(--paper);
+      box-shadow: 0 1px 7px rgba(0,0,0,.08);
+    }
+
+    .sidebar {
+      grid-column: 2;
+      grid-row: 1;
+      position: sticky;
+      top: 28px;
+      height: calc(100vh - 56px);
+      padding: 18px 0 28px 22px;
+      border-left: 1px solid #bdbdbd;
+      background: transparent;
+      overflow: auto;
+      font-family: var(--font-body);
+    }
+
+    .brand {
+      display: block;
+      margin: 0 0 28px;
+      padding: 0 0 13px;
+      border-bottom: 1px solid #9a9a9a;
+    }
+    .brand-mark { display: none; }
+    .brand-title {
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 19px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .brand-subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 13px;
+      line-height: 1.3;
+      font-style: italic;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .side-label {
+      margin: 22px 0 6px;
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .side-label:first-of-type::before { content: "Contents"; }
+    .side-label:first-of-type { font-size: 0; }
+    .side-label:first-of-type::before { font-size: 15px; }
+
+    .side-nav { display: block; }
+    .side-nav a {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 10px;
+      padding: 4px 0;
+      color: #545454;
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      line-height: 1.28;
+      text-decoration: none;
+      transition: none;
+    }
+    .side-nav a::before { display: none; }
+    .side-nav a:hover { color: var(--ink-strong); transform: none; text-decoration: underline; }
+    .side-nav a.active { color: var(--ink-strong); font-weight: 700; }
+    .side-nav a.active::after {
+      content: "";
+      align-self: center;
+      width: 18px;
+      border-top: 1px solid var(--ink-strong);
+    }
+    .side-nav .count { color: var(--faint); font: 12px/1 var(--font-mono); }
+
+    .session-card {
+      margin-top: 30px;
+      padding: 11px 0 0;
+      border-top: 1px solid #c8c8c8;
+      font-family: var(--font-body);
+    }
+    .session-card strong { font-family: var(--font-body); font-size: 13px; font-weight: 400; }
+    .session-card span { font-family: var(--font-body); font-size: 12px; line-height: 1.4; }
+    .live-dot { width: 5px; height: 5px; margin-right: 5px; }
+
+    .toolbar {
+      margin: -42px 0 30px;
+      gap: 18px;
+      font-family: var(--font-body);
+    }
+    .icon-button, .json-action {
+      padding: 0;
+      color: #555;
+      border: 0;
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: 13px;
+      letter-spacing: 0;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .icon-button:hover, .json-action:hover { color: var(--ink-strong); border: 0; }
+
+    /* article title block */
+    .hero {
+      padding: 0 0 38px;
+      border: 0;
+      border-bottom: 1px solid var(--ink-strong);
+      text-align: center;
+    }
+    .eyebrow {
+      margin: 0 0 21px;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 400;
+      font-variant: small-caps;
+      letter-spacing: .08em;
+      text-transform: none;
+    }
+    .eyebrow::before { content: none; }
+    h1 {
+      max-width: 720px;
+      margin: 0 auto;
+      color: var(--ink-strong);
+      font-family: var(--font-display);
+      font-size: clamp(35px, 4vw, 48px);
+      line-height: 1.11;
+      font-weight: 700;
+      letter-spacing: -.012em;
+      text-wrap: balance;
+    }
+    .hero-question {
+      max-width: 690px;
+      margin: 30px auto 0;
+      padding: 0;
+      color: var(--ink);
+      border: 0;
+      font-family: var(--font-body);
+      font-size: 17px;
+      line-height: 1.55;
+      font-style: normal;
+      text-align: justify;
+      hyphens: auto;
+    }
+    .hero-question::before {
+      content: "Research Question";
+      display: block;
+      margin-bottom: 7px;
+      color: var(--ink-strong);
+      font-weight: 700;
+      text-align: center;
+    }
+    .hero-meta {
+      justify-content: center;
+      gap: 5px 15px;
+      margin-top: 24px;
+      font-family: var(--font-body);
+    }
+    .badge {
+      color: #555;
+      font-family: var(--font-body);
+      font-size: 12.5px;
+      line-height: 1.3;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .badge::before { content: "·"; margin-right: 7px; color: #777; }
+    .hero-meta .badge:first-child::before { content: none; }
+
+    /* LaTeX-like section rhythm. */
+    .section {
+      margin-top: 48px;
+      counter-increment: latex-section;
+      scroll-margin-top: 24px;
+    }
+    .report { counter-reset: latex-section; }
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 18px;
+      padding: 0;
+      border: 0;
+    }
+    .section-kicker {
+      display: none;
+    }
+    .section-heading h2::before {
+      content: counter(latex-section) "\00A0\00A0";
+      font-weight: 700;
+    }
+    h2 {
+      margin: 0;
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 27px;
+      line-height: 1.16;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 0;
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 20px;
+      line-height: 1.3;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    h4 {
+      margin: 0 0 4px;
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .section-heading > .badge {
+      color: var(--faint);
+      font-size: 12px;
+      font-style: italic;
+    }
+    .rich-text { line-height: 1.62; }
+    .rich-text.strong { color: var(--ink); font-size: 18px; line-height: 1.62; font-weight: 400; }
+
+    /* structured abstract: term + paragraph, no card cues */
+    .summary-grid { display: block; }
+    .summary-card,
+    .summary-card.conclusion,
+    .summary-card.next {
+      display: grid;
+      grid-template-columns: 168px minmax(0,1fr);
+      gap: 22px;
+      padding: 9px 0;
+      border: 0;
+      background: transparent;
+    }
+    .summary-card.conclusion { padding-top: 0; }
+    .summary-card h4 {
+      margin: 1px 0 0;
+      font-size: 15px;
+    }
+    .summary-card .rich-text { text-align: justify; }
+
+    /* protocol deviations look like compact theorem/remark blocks, not alerts */
+    .warning-list { gap: 18px; }
+    .warning-card,
+    .warning-card.unapproved {
+      padding: 12px 16px;
+      border: 1px solid #9e9e9e;
+      border-left: 3px solid var(--ink-strong);
+      background: #fff;
+    }
+    .warning-card.unapproved { border-left-color: var(--red); }
+    .warning-title {
+      margin-bottom: 9px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .warning-grid {
+      grid-template-columns: minmax(110px,.55fr) minmax(130px,.65fr) minmax(220px,1.45fr);
+      gap: 18px;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .warning-grid b {
+      margin-bottom: 1px;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-variant: small-caps;
+      letter-spacing: .04em;
+      text-transform: none;
+    }
+
+    /* booktabs */
+    .table-wrap { margin: 18px 0 34px; }
+    table {
+      border-top: 2px solid var(--ink-strong);
+      border-bottom: 2px solid var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.42;
+    }
+    th {
+      padding: 8px 10px;
+      color: var(--ink-strong);
+      border-bottom: 1px solid var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    td { padding: 8px 10px; border-bottom: 0; }
+    tbody tr + tr td { border-top: 1px solid #e5e5e5; }
+    tbody tr:hover { background: transparent; }
+    .numeric { color: var(--ink); font-family: var(--font-body); font-variant-numeric: tabular-nums; }
+
+    /* Experiments become subsections of the paper. */
+    .experiment-list { counter-reset: latex-experiment; }
+    details.experiment {
+      counter-increment: latex-experiment;
+      margin-top: 20px;
+      padding-top: 0;
+      border: 0;
+      border-top: 1px solid #aaa;
+    }
+    details.experiment:last-child { border-bottom: 0; }
+    details.experiment > summary {
+      grid-template-columns: minmax(0,1fr) auto 18px;
+      gap: 12px;
+      padding: 15px 0 12px;
+      font-family: var(--font-body);
+    }
+    details.experiment > summary::after { grid-column: 3; font-size: 17px; }
+    .experiment-index { display: none; }
+    details.experiment > summary > div:nth-child(2) { grid-column: 1; }
+    details.experiment > summary > .badge { grid-column: 2; }
+    .experiment-title {
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 19px;
+      line-height: 1.28;
+      font-weight: 700;
+    }
+    .experiment-title::before {
+      content: "Experiment " counter(latex-experiment) ". ";
+    }
+    .experiment-subtitle {
+      margin-top: 3px;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      line-height: 1.4;
+      font-style: italic;
+    }
+    .experiment-body { padding: 0 0 30px; }
+    .narrative-grid { margin-top: 0; }
+    .narrative {
+      display: block;
+      padding: 9px 0;
+      border: 0;
+    }
+    .narrative + .narrative { border-top: 0; }
+    .narrative.analysis { border: 0; }
+    .narrative h4 { display: inline; margin-right: 5px; font-size: 15px; }
+    .narrative h4::after { content: "."; }
+    .narrative .rich-text {
+      display: inline;
+      font-family: var(--font-body);
+      font-size: 17px;
+      line-height: 1.62;
+    }
+
+    .subdetails {
+      margin-top: 16px;
+      border: 0;
+      border-top: 1px solid #c9c9c9;
+    }
+    .subdetails > summary {
+      padding: 8px 0;
+      color: var(--ink-strong);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.4;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .subdetails-content { padding: 5px 0 8px; }
+
+    .definition-grid {
+      grid-template-columns: minmax(135px,.7fr) minmax(175px,.9fr) minmax(220px,1.4fr);
+      border-top: 1px solid var(--ink-strong);
+      border-bottom: 1px solid var(--ink-strong);
+      font-family: var(--font-body);
+    }
+    .definition-grid > div { padding: 7px 8px; border-bottom: 1px solid #e4e4e4; }
+    .definition-grid .label { color: var(--ink); font-family: var(--font-body); font-size: 13px; }
+    .definition-grid .value { color: var(--ink); font-family: var(--font-mono); font-size: 12.5px; }
+    .definition-grid .why { color: var(--muted); font-family: var(--font-body); font-size: 13px; }
+
+    .source-card, .artifact-card {
+      padding: 12px 0;
+      border-bottom: 1px solid #d4d4d4;
+      font-family: var(--font-body);
+    }
+    .source-card:first-child, .artifact-card:first-child { border-top: 1px solid #d4d4d4; }
+    .source-reference, .artifact-path { color: var(--accent); font: 12px/1.5 var(--font-mono); }
+    .source-summary, .artifact-description { max-width: none; color: var(--ink); font: 15px/1.5 var(--font-body); }
+    .takeaway {
+      margin-top: 7px;
+      padding: 0;
+      color: var(--ink);
+      border: 0;
+      font: italic 15px/1.5 var(--font-body);
+    }
+    .takeaway::before { content: "Takeaway. "; font-style: normal; font-weight: 700; }
+
+    /* figures and captions */
+    .image-frame { margin: 20px auto 0; }
+    .image-frame img { border: 0; max-height: 540px; }
+    .image-caption {
+      display: block;
+      max-width: 650px;
+      margin: 8px auto 0;
+      padding: 0;
+      color: var(--ink);
+      border: 0;
+      font: 13.5px/1.45 var(--font-body);
+      text-align: center;
+    }
+    .image-caption span:first-child::before { content: "Figure. "; font-weight: 700; }
+    .image-caption span:last-child { display: none; }
+
+    .formula-card { font-family: var(--font-body); }
+    .formula-display {
+      margin: 22px 0;
+      padding: 10px 0;
+      border: 0;
+      background: transparent;
+      font-size: 19px;
+      text-align: center;
+    }
+
+    /* JSON stays functional, rendered like a listings/verbatim environment. */
+    .json-viewer {
+      border: 1px solid #bcbcbc;
+      border-radius: 0;
+      background: #fbfbfb;
+      color: #222;
+      font-family: var(--font-mono);
+    }
+    .json-toolbar {
+      padding: 7px 9px;
+      border-bottom: 1px solid #c8c8c8;
+      background: #f1f1f1;
+    }
+    .json-title { color: #222; font: 700 12px var(--font-mono); }
+    .json-stat { color: #666; font: 11px var(--font-mono); }
+    .json-action { color: #333; font: 12px var(--font-body); text-decoration: none; }
+    .json-action.active { color: var(--accent); text-decoration: underline; }
+    .json-search { border-radius: 0; font: 12px var(--font-mono); }
+    .json-content { font: 12.5px/1.62 var(--font-mono); }
+
+    dialog { border-radius: 0; }
+    .modal-head { font-family: var(--font-body); }
+    .footer {
+      margin-top: 58px;
+      padding-top: 13px;
+      border-top: 1px solid var(--ink-strong);
+      color: #666;
+      font: 12px/1.45 var(--font-body);
+      text-align: center;
+      letter-spacing: 0;
+    }
+
+    @media (max-width: 1120px) {
+      .app-shell { width: min(1050px, calc(100% - 28px)); grid-template-columns: minmax(0,1fr) 205px; gap: 36px; }
+      .report { padding-inline: 54px; }
+      .summary-card { grid-template-columns: 150px minmax(0,1fr); }
+    }
+
+    @media (max-width: 900px) {
+      html, body { background: #fff; }
+      .app-shell { width: 100%; margin: 0; display: flex; padding: 0; }
+      .sidebar {
+        order: 0;
+        position: relative;
+        width: 100%;
+        height: auto;
+        padding: 18px 24px 15px;
+        border: 0;
+        border-bottom: 1px solid #aaa;
+      }
+      .brand { margin-bottom: 10px; }
+      .brand-subtitle, .session-card, .side-label, #experiment-nav { display: none; }
+      #side-nav { display: flex; gap: 16px; overflow-x: auto; }
+      .side-nav a { flex: 0 0 auto; font-size: 13px; }
+      .side-nav a.active::after { display: none; }
+      .main { order: 1; width: 100%; }
+      .report { box-shadow: none; padding: 48px 42px 60px; }
+      .toolbar { margin-top: -27px; }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 17px; line-height: 1.58; }
+      .report { padding: 38px 22px 50px; }
+      h1 { font-size: clamp(31px, 10vw, 39px); }
+      .hero-question { font-size: 16.5px; text-align: left; }
+      h2 { font-size: 24px; }
+      h3 { font-size: 19px; }
+      .summary-card { display: block; padding: 7px 0 12px; }
+      .summary-card h4 { margin-bottom: 3px; }
+      .warning-grid, .definition-grid { grid-template-columns: 1fr; }
+      .warning-grid > div { padding-top: 5px; }
+      details.experiment > summary { grid-template-columns: minmax(0,1fr) 18px; }
+      details.experiment > summary > .badge { display: none; }
+      .experiment-title { font-size: 18px; }
+      .narrative .rich-text { font-size: 16.5px; }
+      table { font-size: 14px; }
+      th { font-size: 13px; }
+    }
+
+    @media print {
+      @page { size: A4; margin: 22mm 21mm 24mm; }
+      html, body { background: #fff !important; }
+      .report { padding: 0; box-shadow: none; }
+      body { font-family: var(--font-body); font-size: 10.5pt; line-height: 1.45; }
+      .hero { padding-bottom: 18pt; }
+      h1 { font-size: 22pt; }
+      h2 { font-size: 14.4pt; }
+      h3 { font-size: 12pt; }
+      h4 { font-size: 10.5pt; }
+      .hero-question { font-size: 10.5pt; }
+      .rich-text.strong, .narrative .rich-text { font-size: 10.5pt; }
+      table { font-size: 9.5pt; }
+      .section { margin-top: 22pt; }
+    }
+  </style>
+
+
+  <style id="wide-sourcehan-maple-pass">
+    /* Requested refinements: wider paper, Source Han Serif for CJK, Maple Mono for code/JSON. */
+    @font-face {
+      font-family: "Source Han Serif Preferred";
+      src: local("Source Han Serif SC"), local("Source Han Serif CN"), local("思源宋体"), local("Noto Serif CJK SC"), local("Noto Serif SC");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Maple Mono Preferred";
+      src: local("Maple Mono"), local("Maple Mono NF"), local("Maple Mono CN"), local("Maple Mono NF CN"), local("Maple Mono SC NF");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
+    :root {
+      /* TeX handles Latin glyphs; Source Han Serif becomes the explicit CJK face. */
+      --font-display: "TeX Main", "Latin Modern Roman", "Computer Modern Serif", "CMU Serif", "Source Han Serif Preferred", "Source Han Serif SC", "思源宋体", "Noto Serif CJK SC", serif;
+      --font-body: "TeX Main", "Latin Modern Roman", "Computer Modern Serif", "CMU Serif", "Source Han Serif Preferred", "Source Han Serif SC", "思源宋体", "Noto Serif CJK SC", serif;
+      --font-mono: "Maple Mono Preferred", "Maple Mono", "Maple Mono NF", "Maple Mono CN", "Maple Mono NF CN", "TeX Typewriter", "Latin Modern Mono", monospace;
+    }
+
+    /* Make the paper materially wider, not merely the outer canvas. */
+    .app-shell {
+      width: min(1540px, calc(100% - 44px));
+      grid-template-columns: minmax(0, 1140px) 250px;
+      gap: 62px;
+    }
+    .report {
+      padding-left: 84px;
+      padding-right: 84px;
+    }
+    h1 { max-width: 900px; }
+    .hero-question { max-width: 900px; }
+    .image-caption { max-width: 820px; }
+
+    /* Maple Mono across technical values, with a comfortably readable JSON scale. */
+    .numeric,
+    .definition-grid .value,
+    .source-reference,
+    .artifact-path,
+    .side-nav .count,
+    .json-viewer,
+    .json-title,
+    .json-stat,
+    .json-search,
+    .json-content,
+    .json-line code {
+      font-family: var(--font-mono);
+    }
+
+    .json-toolbar {
+      gap: 12px;
+      padding: 10px 12px;
+    }
+    .json-title { font-size: 14px; line-height: 1.45; }
+    .json-stat { font-size: 12.5px; line-height: 1.45; }
+    .json-action { font-size: 13px; line-height: 1.45; }
+    .json-search {
+      width: min(290px, 100%);
+      padding: 7px 9px;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+    .json-content {
+      max-height: 680px;
+      padding: 14px 16px 18px;
+      font-size: 14.5px;
+      line-height: 1.68;
+    }
+    .json-line {
+      grid-template-columns: 54px minmax(0, 1fr);
+      min-height: 25px;
+    }
+    .json-line-number {
+      padding-right: 14px;
+      font-size: 12.5px;
+    }
+
+    @media (max-width: 1320px) {
+      .app-shell {
+        width: min(1220px, calc(100% - 32px));
+        grid-template-columns: minmax(0, 930px) 220px;
+        gap: 40px;
+      }
+      .report { padding-left: 64px; padding-right: 64px; }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell { width: 100%; }
+      .report { padding-left: 42px; padding-right: 42px; }
+    }
+
+    @media (max-width: 640px) {
+      .report { padding-left: 22px; padding-right: 22px; }
+      .json-title { font-size: 13px; }
+      .json-stat { font-size: 11.5px; }
+      .json-action { font-size: 12px; }
+      .json-search { font-size: 13px; }
+      .json-content { font-size: 13.5px; line-height: 1.65; }
+    }
+  </style>
+
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">RL</div>
+        <div>
+          <div class="brand-title">Research Checkpoint</div>
+          <div class="brand-subtitle">Research record</div>
+        </div>
+      </div>
+      <div class="side-label">Contents</div>
+      <nav class="side-nav" id="side-nav"></nav>
+      <div class="side-label">Experiment index</div>
+      <nav class="side-nav" id="experiment-nav"></nav>
+      <div class="session-card">
+        <strong><span class="live-dot"></span>Session connected</strong>
+        <span>内存报告 · localhost · 不写入项目目录</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <article class="report" id="report"></article>
+    </main>
+  </div>
+
+  <dialog id="image-dialog">
+    <div class="modal-head">
+      <strong id="modal-title">Artifact preview</strong>
+      <button class="icon-button" id="modal-close" type="button">关闭</button>
+    </div>
+    <img class="modal-image" id="modal-image" alt="Expanded artifact preview" />
+  </dialog>
+
+  <script id="checkpoint-data" type="application/json">__RESEARCH_LOOP_CHECKPOINT_DATA__</script>
+
+  <script>
+    "use strict";
+
+    const CHECKPOINT = JSON.parse(document.getElementById("checkpoint-data").textContent);
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const el = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+
+    function richText(text, className = "") {
+      return el("div", `rich-text ${className}`.trim(), text || "—");
+    }
+
+    function badge(text, className = "") {
+      return el("span", `badge ${className}`.trim(), text);
+    }
+
+    function formatCell(cell) {
+      if (!cell) return "";
+      if (cell.value !== undefined) {
+        const digits = Math.max(1, Math.min(8, cell.significantDigits || 4));
+        const value = Number(cell.value).toLocaleString(undefined, { maximumSignificantDigits: digits });
+        return cell.unit ? `${value} ${cell.unit}` : value;
+      }
+      return cell.text || "";
+    }
+
+    function sectionHeading(kicker, title, meta) {
+      const wrap = el("div", "section-heading");
+      const left = el("div");
+      left.append(el("div", "section-kicker", kicker), el("h2", "", title));
+      wrap.append(left);
+      if (meta) wrap.append(badge(meta));
+      return wrap;
+    }
+
+    function renderResultTable(table) {
+      const wrap = el("div", "table-wrap");
+      const tableEl = el("table");
+      const thead = el("thead");
+      const headerRow = el("tr");
+      table.columns.forEach(column => headerRow.append(el("th", "", column)));
+      thead.append(headerRow);
+      const tbody = el("tbody");
+      table.rows.forEach(row => {
+        const tr = el("tr");
+        table.columns.forEach((_, index) => {
+          const cell = row[index];
+          const td = el("td", cell && cell.value !== undefined ? "numeric" : "", formatCell(cell));
+          if (/delta|Δ/i.test(table.columns[index]) && cell && Number(cell.value) > 0) td.classList.add("delta-positive");
+          if (/delta|Δ/i.test(table.columns[index]) && cell && Number(cell.value) < 0) td.classList.add("delta-negative");
+          tr.append(td);
+        });
+        tbody.append(tr);
+      });
+      tableEl.append(thead, tbody);
+      wrap.append(tableEl);
+      return wrap;
+    }
+
+    function renderDefinitionGrid(experiment) {
+      const grid = el("div", "definition-grid");
+      const rows = [
+        ["Protocol · intent", experiment.protocol.intent, "Scientific role of this run"],
+        ["Protocol · data scope", experiment.protocol.dataScope, "Actual data used"],
+        ...(experiment.protocol.reference ? [["Protocol · reference", experiment.protocol.reference, "Target protocol or result"]] : []),
+        ...experiment.setup.map(item => [`Setup · ${item.name}`, item.value, item.description || ""]),
+        ...experiment.variables.map(item => [`${item.role} · ${item.name}`, item.value || "—", item.description]),
+        ...experiment.parameters.map(item => [`Parameter · ${item.name}`, item.value, item.rationale || ""])
+      ];
+      rows.forEach(([label, value, why]) => grid.append(el("div", "label", label), el("div", "value", value), el("div", "why", why)));
+      return grid;
+    }
+
+    function renderSources(experiment) {
+      const list = el("div", "source-list");
+      if (!experiment.protocol.sources.length) {
+        list.append(el("div", "source-card", "该实验没有 reference source requirement。"));
+        return list;
+      }
+      experiment.protocol.sources.forEach(source => {
+        const card = el("div", "source-card");
+        const head = el("div", "source-head");
+        const statusClass = source.status === "consulted" ? "success" : source.status === "inaccessible" ? "danger" : "";
+        head.append(el("strong", "", source.kind.toUpperCase()), badge(source.status, statusClass));
+        card.append(head, el("div", "source-reference", source.reference || "No reference"), el("div", "source-summary", source.summary));
+        list.append(card);
+      });
+      return list;
+    }
+
+    function renderDeviations(experiment) {
+      const list = el("div", "warning-list");
+      if (!experiment.protocol.deviations.length) {
+        list.append(el("div", "source-card", "No protocol deviations recorded."));
+        return list;
+      }
+      experiment.protocol.deviations.forEach(item => {
+        const card = el("div", `warning-card ${item.approvedByUser ? "" : "unapproved"}`.trim());
+        const head = el("div", "warning-title");
+        head.append(el("span", "", item.field), badge(item.approvedByUser ? "Approved" : "UNAPPROVED", item.approvedByUser ? "success" : "danger"));
+        const grid = el("div", "warning-grid");
+        [["Reference", item.reference], ["Actual", item.actual], ["Reason / limit", item.reason]].forEach(([label, value]) => {
+          const cell = el("div");
+          cell.append(el("b", "", label), document.createTextNode(value));
+          grid.append(cell);
+        });
+        card.append(head, grid);
+        list.append(card);
+      });
+      return list;
+    }
+
+    function subdetails(title, content, open = false) {
+      const details = el("details", "subdetails");
+      details.open = open;
+      details.append(el("summary", "", title));
+      const body = el("div", "subdetails-content");
+      body.append(content);
+      details.append(body);
+      return details;
+    }
+
+    function renderExperiment(experiment, index) {
+      const details = el("details", "experiment");
+      details.id = `experiment-${index + 1}`;
+      details.open = index === 0;
+      const summary = el("summary");
+      const names = { reproduction: "复现", diagnostic: "诊断", exploratory: "探索", ablation: "消融" };
+      const title = el("div");
+      title.append(el("div", "experiment-title", experiment.title), el("div", "experiment-subtitle", `${names[experiment.protocol.intent] || experiment.protocol.intent} · ${experiment.protocol.dataScope}`));
+      summary.append(el("div", "experiment-index", `E${index + 1}`), title, badge(experiment.protocol.intent, `intent-${experiment.protocol.intent}`));
+
+      const body = el("div", "experiment-body");
+      const narrative = el("div", "narrative-grid");
+      [["Rationale", experiment.rationale, ""], ["Design", experiment.design, ""], ["Observation", experiment.observation, "observation"], ["Analysis", experiment.analysis, "analysis"]].forEach(([titleText, value, kind]) => {
+        const card = el("div", `narrative ${kind}`.trim());
+        card.append(el("h4", "", titleText), richText(value));
+        narrative.append(card);
+      });
+      body.append(narrative);
+      body.append(subdetails("Experimental details", renderDefinitionGrid(experiment)));
+      body.append(subdetails(`Reference sources · ${experiment.protocol.sources.length}`, renderSources(experiment)));
+      body.append(subdetails(`Protocol deviations · ${experiment.protocol.deviations.length}`, renderDeviations(experiment), experiment.protocol.deviations.some(item => !item.approvedByUser)));
+      if (experiment.tables.length) {
+        const tables = el("div");
+        experiment.tables.forEach((table, tableIndex) => {
+          if (table.title) tables.append(el("h3", "", table.title));
+          tables.append(renderResultTable(table));
+          if (tableIndex < experiment.tables.length - 1) tables.append(el("div", "", " "));
+        });
+        body.append(subdetails(`Result tables · ${experiment.tables.length}`, tables, true));
+      }
+      const assigned = CHECKPOINT.results.filter(result => result.experiment === experiment.title);
+      if (assigned.length) body.append(subdetails(`Related artifacts · ${assigned.length}`, renderArtifacts(assigned), true));
+      details.append(summary, body);
+      return details;
+    }
+
+    function jsonStats(value) {
+      let nodes = 0;
+      let maxDepth = 0;
+      const visit = (current, depth) => {
+        nodes += 1;
+        maxDepth = Math.max(maxDepth, depth);
+        if (current && typeof current === "object") Object.values(current).forEach(item => visit(item, depth + 1));
+      };
+      visit(value, 0);
+      return { nodes, maxDepth };
+    }
+
+    function primitiveSpan(value) {
+      if (value === null) return el("span", "json-null", "null");
+      const type = typeof value;
+      if (type === "string") return el("span", "json-string", JSON.stringify(value));
+      if (type === "number") return el("span", "json-number", String(value));
+      if (type === "boolean") return el("span", "json-boolean", String(value));
+      return el("span", "json-null", String(value));
+    }
+
+    function renderTreeNode(key, value, depth, expandDepth) {
+      const isObject = value !== null && typeof value === "object";
+      if (!isObject) {
+        const row = el("div", "json-primitive");
+        if (key !== null) row.append(el("span", "json-key", `${JSON.stringify(String(key))}: `));
+        row.append(primitiveSpan(value));
+        return row;
+      }
+      const details = el("details");
+      details.open = depth < expandDepth;
+      const count = Array.isArray(value) ? value.length : Object.keys(value).length;
+      const shape = Array.isArray(value) ? `[${count}]` : `{${count}}`;
+      const summary = el("summary");
+      if (key !== null) summary.append(el("span", "json-key", `${JSON.stringify(String(key))}: `));
+      summary.append(el("span", "json-shape", shape));
+      details.append(summary);
+      let built = false;
+      const build = () => {
+        if (built) return;
+        built = true;
+        const entries = Array.isArray(value) ? value.map((item, index) => [index, item]) : Object.entries(value);
+        if (Array.isArray(value) && entries.length > 50) {
+          for (let start = 0; start < entries.length; start += 50) {
+            const end = Math.min(entries.length, start + 50);
+            const chunk = el("details");
+            chunk.append(el("summary", "json-shape", `items ${start}–${end - 1}`));
+            let chunkBuilt = false;
+            chunk.addEventListener("toggle", () => {
+              if (!chunk.open || chunkBuilt) return;
+              chunkBuilt = true;
+              entries.slice(start, end).forEach(([childKey, child]) => chunk.append(renderTreeNode(childKey, child, depth + 1, expandDepth)));
+            });
+            details.append(chunk);
+          }
+        } else {
+          entries.forEach(([childKey, child]) => details.append(renderTreeNode(childKey, child, depth + 1, expandDepth)));
+        }
+      };
+      details.addEventListener("toggle", () => { if (details.open) build(); });
+      if (details.open) build();
+      return details;
+    }
+
+    function renderRawJson(raw, query = "") {
+      const root = el("div", "json-raw");
+      const normalizedQuery = query.trim().toLowerCase();
+      let matches = 0;
+      raw.split("\n").forEach((line, index) => {
+        if (normalizedQuery && !line.toLowerCase().includes(normalizedQuery)) return;
+        matches += 1;
+        const row = el("div", "json-line");
+        row.append(el("span", "json-line-number", String(index + 1)));
+        const code = el("code");
+        if (!normalizedQuery) code.textContent = line;
+        else {
+          let cursor = 0;
+          const lower = line.toLowerCase();
+          while (true) {
+            const found = lower.indexOf(normalizedQuery, cursor);
+            if (found < 0) break;
+            code.append(document.createTextNode(line.slice(cursor, found)), el("mark", "", line.slice(found, found + normalizedQuery.length)));
+            cursor = found + normalizedQuery.length;
+          }
+          code.append(document.createTextNode(line.slice(cursor)));
+        }
+        row.append(code);
+        root.append(row);
+      });
+      if (!matches) root.append(el("div", "json-empty", "没有匹配项"));
+      return root;
+    }
+
+    function renderJsonViewer(raw, title) {
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { return null; }
+      const viewer = el("div", "json-viewer");
+      const toolbar = el("div", "json-toolbar");
+      const stats = jsonStats(parsed);
+      const bytes = new TextEncoder().encode(raw).length;
+      const titleNode = el("div", "json-title", title);
+      const treeButton = el("button", "json-action active", "Tree");
+      const rawButton = el("button", "json-action", "Raw");
+      const depthButton = el("button", "json-action", "Depth: 2");
+      const copyButton = el("button", "json-action", "Copy");
+      const search = el("input", "json-search");
+      search.placeholder = "搜索 key / value…";
+      search.type = "search";
+      toolbar.append(titleNode, el("span", "json-stat", `${(bytes / 1024).toFixed(1)} KB`), el("span", "json-stat", `${stats.nodes.toLocaleString()} nodes`), el("span", "json-stat", `depth ${stats.maxDepth}`), treeButton, rawButton, depthButton, copyButton, search);
+      const content = el("div", "json-content json-tree");
+      let mode = "tree";
+      let depth = 2;
+      const draw = () => {
+        content.replaceChildren();
+        content.className = `json-content ${mode === "tree" ? "json-tree" : ""}`;
+        if (mode === "tree") content.append(renderTreeNode(null, parsed, 0, depth));
+        else content.append(renderRawJson(raw, search.value));
+        treeButton.classList.toggle("active", mode === "tree");
+        rawButton.classList.toggle("active", mode === "raw");
+        search.hidden = mode !== "raw";
+      };
+      treeButton.addEventListener("click", () => { mode = "tree"; draw(); });
+      rawButton.addEventListener("click", () => { mode = "raw"; draw(); search.focus(); });
+      depthButton.addEventListener("click", () => {
+        depth = depth === 1 ? 2 : depth === 2 ? 4 : depth === 4 ? 99 : 1;
+        depthButton.textContent = depth === 99 ? "Depth: all" : `Depth: ${depth}`;
+        draw();
+      });
+      search.addEventListener("input", draw);
+      copyButton.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(raw); copyButton.textContent = "Copied"; }
+        catch { copyButton.textContent = "Copy failed"; }
+        setTimeout(() => { copyButton.textContent = "Copy"; }, 1200);
+      });
+      viewer.append(toolbar, content);
+      draw();
+      return viewer;
+    }
+
+    function renderArtifacts(results) {
+      const grid = el("div", "artifact-grid");
+      results.forEach((result, index) => {
+        const card = el("div", `artifact-card ${result.image ? "image-card" : ""}`.trim());
+        const head = el("div", "artifact-head");
+        head.append(el("h3", "", result.title), badge(result.role, result.role === "evidence" ? "success" : result.role === "diagnostic" ? "intent-diagnostic" : ""));
+        card.append(head, el("div", "artifact-path", result.artifact?.path || result.path), el("div", "artifact-description", result.description));
+        if (result.takeaway) card.append(el("div", "takeaway", `Takeaway · ${result.takeaway}`));
+        if (result.artifact) {
+          const meta = el("div", "hero-meta");
+          meta.append(badge(result.artifact.kind), badge(result.artifact.extension || "directory"), badge(`${(result.artifact.size / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} KB`));
+          if (result.artifact.fileCount !== undefined) meta.append(badge(`${result.artifact.fileCountCapped ? "≥" : ""}${result.artifact.fileCount} files`));
+          card.append(meta);
+        }
+        if (result.image) {
+          const frame = el("div", "image-frame");
+          const image = el("img");
+          image.src = `data:${result.image.mimeType};base64,${result.image.data}`;
+          image.alt = result.title;
+          const caption = el("div", "image-caption");
+          caption.append(el("span", "", result.artifact?.name || result.path), el("span", "", "点击放大"));
+          frame.append(image, caption);
+          frame.addEventListener("click", () => openImage(image.src, result.title));
+          card.append(frame);
+        } else if (result.reportPreview || result.preview) {
+          const json = renderJsonViewer((result.reportPreview ?? result.preview), result.artifact?.name || `artifact-${index + 1}.json`);
+          if (json) card.append(json);
+          else {
+            const pre = el("pre", "json-content");
+            pre.textContent = result.reportPreview ?? result.preview;
+            card.append(pre);
+          }
+        }
+        grid.append(card);
+      });
+      return grid;
+    }
+
+    function openImage(src, title) {
+      $("#modal-image").src = src;
+      $("#modal-title").textContent = title;
+      $("#image-dialog").showModal();
+    }
+
+    function renderReport(data) {
+      const report = $("#report");
+      const toolbar = el("div", "toolbar");
+      const printButton = el("button", "icon-button", "Print / PDF");
+      printButton.addEventListener("click", () => window.print());
+      toolbar.append(printButton);
+
+      const hero = el("header", "hero");
+      hero.id = "overview";
+      hero.append(el("div", "eyebrow", "Checkpoint reached"), el("h1", "", data.title), richText(data.researchQuestion, "hero-question"));
+      const meta = el("div", "hero-meta");
+      meta.append(badge(`${data.experiments.length} experiments`), badge(`${data.results.length} artifacts`));
+      [...new Set(data.experiments.map(item => item.protocol.intent))].forEach(intent => meta.append(badge(intent, `intent-${intent}`)));
+      hero.append(meta);
+
+      const summary = el("section", "section");
+      summary.id = "summary";
+      summary.append(sectionHeading("Decision layer", "Executive summary", "summary + details"));
+      const summaryGrid = el("div", "summary-grid");
+      const conclusion = el("div", "summary-card conclusion wide");
+      conclusion.append(el("h4", "", "Strongest justified conclusion"), richText(data.conclusion || data.overallAnalysis, "strong"));
+      const hypothesis = el("div", "summary-card");
+      hypothesis.append(el("h4", "", "Working hypothesis"), richText(data.hypothesis));
+      const uncertainty = el("div", "summary-card");
+      uncertainty.append(el("h4", "", "Uncertainty / limitations"), richText(data.uncertainty));
+      const next = el("div", "summary-card next wide");
+      next.append(el("h4", "", "Recommended next step"), richText(data.next, "strong"));
+      summaryGrid.append(conclusion, hypothesis, uncertainty, next);
+      summary.append(summaryGrid);
+
+      const deviations = data.experiments.flatMap((experiment, experimentIndex) => experiment.protocol.deviations.map(item => ({ ...item, experiment: experiment.title, experimentIndex })));
+      const warningSection = el("section", "section");
+      warningSection.id = "deviations";
+      warningSection.append(sectionHeading("Scientific integrity", "Protocol deviations", `${deviations.length} recorded`));
+      const warningList = el("div", "warning-list");
+      if (!deviations.length) warningList.append(el("div", "source-card", "No protocol deviations recorded."));
+      deviations.forEach(item => {
+        const card = el("div", `warning-card ${item.approvedByUser ? "" : "unapproved"}`.trim());
+        const head = el("div", "warning-title");
+        head.append(el("span", "", `${item.experiment} · ${item.field}`), badge(item.approvedByUser ? "Approved" : "UNAPPROVED", item.approvedByUser ? "success" : "danger"));
+        const grid = el("div", "warning-grid");
+        [["Reference", item.reference], ["Actual", item.actual], ["Reason / limit", item.reason]].forEach(([label, value]) => {
+          const cell = el("div"); cell.append(el("b", "", label), document.createTextNode(value)); grid.append(cell);
+        });
+        card.append(head, grid); warningList.append(card);
+      });
+      warningSection.append(warningList);
+
+      const evidence = el("section", "section");
+      evidence.id = "evidence";
+      const tables = data.experiments.flatMap(experiment => experiment.tables.map(table => ({ experiment: experiment.title, table })));
+      evidence.append(sectionHeading("Measured results", "Evidence tables", `${tables.length} tables`));
+      if (!tables.length) evidence.append(el("div", "source-card", "No structured result table was provided."));
+      tables.forEach(({ experiment, table }) => {
+        const heading = el("div", "section-heading");
+        heading.append(el("h3", "", table.title || experiment), badge(experiment));
+        evidence.append(heading, renderResultTable(table));
+      });
+
+      const formula = el("section", "section");
+      formula.id = "math";
+      formula.append(sectionHeading("Math rendering", "Formula-aware analysis", "MathJax preview"));
+      const formulaCard = el("div", "formula-card");
+      formulaCard.append(
+        richText("Checkpoint 文本中的 inline TeX 会保留在上下文中，例如 $\\Delta_{acc}=\\hat{a}-a_{ref}$。"),
+        el("div", "formula-display", "$$\\mathrm{CI}_{95\\%}(\\hat a)=\\left[Q_{0.025}(\\hat a^*), Q_{0.975}(\\hat a^*)\\right]$$"),
+        richText("复杂推导保持横向滚动，不压缩表格和正文。Ablation paired effect: $\\bar d = n^{-1}\\sum_i d_i$。")
+      );
+      formula.append(formulaCard);
+
+      const experiments = el("section", "section");
+      experiments.id = "experiments";
+      experiments.append(sectionHeading("Progressive disclosure", "Experiments", `${data.experiments.length} runs`));
+      const experimentList = el("div", "experiment-list");
+      data.experiments.forEach((experiment, index) => experimentList.append(renderExperiment(experiment, index)));
+      experiments.append(experimentList);
+
+      const artifacts = el("section", "section");
+      artifacts.id = "artifacts";
+      artifacts.append(sectionHeading("Evidence objects", "Relevant artifacts", `${data.results.length} curated`), renderArtifacts(data.results));
+
+      const overall = el("section", "section");
+      overall.id = "analysis";
+      overall.append(sectionHeading("Synthesis", "Overall analysis"));
+      const overallCard = el("div", "formula-card");
+      overallCard.append(richText(data.overallAnalysis, "strong"));
+      overall.append(overallCard);
+
+      const footer = el("footer", "footer", "Research Loop checkpoint template · 数据由结构化 CheckpointDetails 渲染 · localhost session memory prototype");
+      report.append(toolbar, hero, summary, warningSection, evidence, formula, experiments, artifacts, overall, footer);
+
+      renderNavigation(data);
+      if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([report]).catch(() => {});
+    }
+
+    function renderNavigation(data) {
+      const nav = $("#side-nav");
+      [["Overview", "overview"], ["Executive summary", "summary"], ["Protocol deviations", "deviations"], ["Evidence tables", "evidence"], ["Formula rendering", "math"], ["Experiments", "experiments"], ["Artifacts & JSON", "artifacts"], ["Overall analysis", "analysis"]].forEach(([label, id]) => {
+        const link = el("a", "", label); link.href = `#${id}`; nav.append(link);
+      });
+      const experimentNav = $("#experiment-nav");
+      data.experiments.forEach((experiment, index) => {
+        const link = el("a"); link.href = `#experiment-${index + 1}`;
+        link.append(el("span", "", experiment.title), el("span", "count", `E${index + 1}`));
+        experimentNav.append(link);
+      });
+    }
+
+    function initAcademicToc() {
+      const links = [...document.querySelectorAll(".side-nav a[href^='#']")];
+      const targets = links.map(link => document.querySelector(link.getAttribute("href"))).filter(Boolean);
+      if (!targets.length) return;
+      const byId = new Map(links.map(link => [link.getAttribute("href").slice(1), link]));
+      const setActive = id => {
+        links.forEach(link => link.classList.toggle("active", link === byId.get(id)));
+      };
+      const observer = new IntersectionObserver(entries => {
+        const visible = entries.filter(entry => entry.isIntersecting).sort((a,b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActive(visible[0].target.id);
+      }, { rootMargin: "-12% 0px -72% 0px", threshold: [0, .01, .2] });
+      targets.forEach(target => observer.observe(target));
+      links.forEach(link => link.addEventListener("click", () => setActive(link.getAttribute("href").slice(1))));
+      setActive("overview");
+    }
+
+    $("#modal-close").addEventListener("click", () => $("#image-dialog").close());
+    $("#image-dialog").addEventListener("click", event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+    renderReport(CHECKPOINT);
+    initAcademicToc();
+  </script>
+</body>
+</html>

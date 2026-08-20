@@ -1,12 +1,13 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Image, Text } from "@earendil-works/pi-tui";
+import { Container, Text } from "@earendil-works/pi-tui";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Type } from "typebox";
 import {
   formatSize,
   loadArtifactPreview,
+  loadArtifactReportPreview,
   resolveArtifactRecord,
   type ArtifactRecord,
   type ArtifactPreview,
@@ -19,6 +20,7 @@ import {
   formatResultTable,
   normalizeCheckpointExperiment as normalizeCoreCheckpointExperiment,
 } from "./core/checkpoint.js";
+import { createTerminalImage } from "./terminal-image.js";
 
 export type ResearchResultRole = "evidence" | "diagnostic" | "dataset" | "intermediate";
 export type ExperimentVariableRole = "independent" | "dependent" | "control" | "derived";
@@ -48,6 +50,7 @@ export interface CheckpointResult {
   columns?: string[];
   experiment?: string;
   preview?: string;
+  reportPreview?: string;
   image?: ArtifactPreview["image"];
 }
 
@@ -129,10 +132,12 @@ export interface CheckpointDetails {
   uncertainty: string;
   next: string;
   results: CheckpointResult[];
+  reportUrl?: string;
 }
 
 interface CheckpointDependencies {
   getArtifacts: () => ArtifactRecord[];
+  publish: (details: CheckpointDetails) => Promise<string | undefined>;
   onReached: (resultCount: number, ctx: ExtensionContext) => void;
 }
 
@@ -290,9 +295,16 @@ export function registerResearchCheckpoint(
         next: params.next,
         results,
       };
+      try {
+        details.reportUrl = await dependencies.publish(details);
+      } catch (error) {
+        ctx.ui.notify(`Checkpoint web report unavailable: ${String(error)}`, "warning");
+      }
       dependencies.onReached(results.length, ctx);
+      const report = formatCheckpointReport(details);
+      const text = details.reportUrl ? `${report}\n\nRendered checkpoint: ${details.reportUrl}` : report;
       return {
-        content: [{ type: "text" as const, text: formatCheckpointReport(details) }],
+        content: [{ type: "text" as const, text }],
         details,
         terminate: true,
       };
@@ -349,6 +361,7 @@ async function prepareCheckpointResults(
         const preview = await loadArtifactPreview(pi, ctx.cwd, artifact, requested.columns);
         result.preview = preview.image ? undefined : preview.text;
         result.image = preview.image;
+        result.reportPreview = await loadArtifactReportPreview(ctx.cwd, artifact).catch(() => undefined);
       } catch {
         // The semantic description and file link remain useful without a preview.
       }
@@ -370,11 +383,16 @@ function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
     container.addChild(new Text(`${theme.bold(`${index + 1}. ${result.title}`)}\n${semantics.join("\n")}`, 0, 1));
     if (result.image) {
       container.addChild(
-        new Image(result.image.data, result.image.mimeType, { fallbackColor: (value) => theme.fg("muted", value) }, {
-          maxWidthCells: 72,
-          maxHeightCells: 24,
-          filename: result.artifact.name,
-        }),
+        createTerminalImage(
+          result.image.data,
+          result.image.mimeType,
+          { fallbackColor: (value) => theme.fg("muted", value) },
+          {
+            maxWidthCells: 72,
+            maxHeightCells: 24,
+            filename: result.artifact.name,
+          },
+        ),
       );
     } else if (result.preview) container.addChild(new Text(result.preview, 0, 1));
   };
@@ -441,6 +459,15 @@ function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
   if (details.results.length > 0) {
     const links = details.results.map((result) => `- ${terminalLink(result.url, result.artifact.path)}`);
     container.addChild(new Text(`${theme.fg("accent", theme.bold("Relevant Artifacts"))}\n${links.join("\n")}`, 0, 1));
+  }
+  if (details.reportUrl) {
+    container.addChild(
+      new Text(
+        `${theme.fg("accent", theme.bold("Rendered Checkpoint"))}\n${terminalLink(details.reportUrl, details.reportUrl)}`,
+        0,
+        1,
+      ),
+    );
   }
   return container;
 }

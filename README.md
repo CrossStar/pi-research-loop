@@ -19,7 +19,7 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 - **真实用户决策**：Pi 对精确的成本升级和协议偏差显示同步确认；可选检测
   `ask_user_question`，在关键研究分支中使用结构化问答而不是猜测。
 - **结构化 evidence**：Checkpoint 记录实际实验条件、参考来源、设置变化、结果、分析和
-  下一步。
+  下一步；Pi 同时生成 session-scoped localhost 网页报告。
 - **可见状态**：Claude Status Line 持续展示 mode、actions、artifacts、Soft Review 和
   active experiment。
 
@@ -31,9 +31,9 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 | 当前模式提示 | Session/Prompt Hooks | Context injection |
 | Governor 工具约束 | `PreToolUse` | Pi tool gate |
 | Experiment lifecycle | MCP tools | Pi tools |
-| Research Checkpoint | Markdown report | TUI + Markdown report |
+| Research Checkpoint | Markdown report | TUI + Markdown + localhost HTML report |
 | Artifact metadata | Write/Edit Hooks | Artifact Radar |
-| Artifact preview | Claude 原生文件读取 | Pi TUI 图片和表格 preview |
+| Artifact preview | Claude 原生文件读取 | Chafa 优先的图片、表格和网页 preview |
 | Status display | Claude Status Line | Pi footer status |
 
 ## Claude Code 安装
@@ -217,6 +217,30 @@ pi install npm:@juicesharp/rpiv-ask-user-question
 confirmation：批准后只放行该次 action；拒绝或取消会中止当前 Agent turn。对于其他 Governor
 拒绝，首次结果会明确禁止原样重试；如果 Agent 仍重复同一 tool call，第二次拒绝会主动中止
 当前 turn 并交还控制权。
+
+### Pi Checkpoint 网页报告
+
+Pi session 启动时会在 `127.0.0.1` 上建立仅限当前 session 的内存报告服务。每次
+`research_checkpoint` 完成后，终端输出的最后一段会给出对应报告 URL；插件只显示链接，
+不会自动打开浏览器。报告复用 `src/checkpoint-report-template.html` 的 LaTeX-like 版式，支持
+公式、结构化表格、图片、折叠实验详情，以及带搜索、Tree/Raw 切换和大数组分段加载的 JSON
+viewer。
+
+服务默认从端口 `43119` 开始向上查找空闲端口。可通过环境变量修改起始端口：
+
+```bash
+RESEARCH_LOOP_CHECKPOINT_PORT=45000 pi -ne -e .
+```
+
+报告和当前 session 的 checkpoint history 只保存在内存中；session shutdown 时服务关闭并清空
+history，不向项目目录写入报告文件。服务只绑定 loopback，并使用随机 session path。模板当前的
+MathJax 与 KaTeX 字体资源来自 CDN，因此公式和 TeX 字体的首次加载需要网络。
+
+### Pi 图片渲染
+
+如果 `chafa` 可从 `PATH` 运行，Pi 的 Checkpoint 和 `/artifacts` 图片预览会优先使用 Chafa 的
+ANSI symbol renderer；如果 Chafa 不可用或无法解码某张图片，则自动回退到 Pi 原生的 Kitty、
+iTerm2、Ghostty、WezTerm 或 Warp 图片协议，不影响 artifact link 和网页图片。
 
 ### Pi Footer Status
 

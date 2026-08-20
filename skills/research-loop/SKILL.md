@@ -1,7 +1,7 @@
 ---
 name: research-loop
 description: Use when the user explicitly asks to enable, disable, or inspect Research Loop; configure its status line; choose a research mode; run a tracked experiment; reproduce a result; or finish an experiment with a checkpoint.
-version: 0.3.1
+version: 0.4.0
 ---
 
 # Research Loop

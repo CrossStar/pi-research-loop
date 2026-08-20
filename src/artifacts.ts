@@ -22,6 +22,7 @@ const SUPPORTED_EXTENSIONS = new Set([
   ".parquet",
 ]);
 const TABLE_EXTENSIONS = new Set([".csv", ".parquet"]);
+const MAX_REPORT_JSON_BYTES = 32 * 1024 * 1024;
 
 const IMAGE_MIME: Record<string, string> = {
   ".png": "image/png",
@@ -244,6 +245,18 @@ export async function loadArtifactPreview(
   }
 
   return { title: record.name, text: metadata };
+}
+
+export async function loadArtifactReportPreview(
+  cwd: string,
+  record: ArtifactRecord,
+): Promise<string | undefined> {
+  if (record.kind !== "file" || record.extension !== ".json" || record.size > MAX_REPORT_JSON_BYTES) {
+    return undefined;
+  }
+  const content = await readFile(resolve(cwd, record.path), "utf8");
+  JSON.parse(content);
+  return content;
 }
 
 export function formatSize(bytes: number): string {
