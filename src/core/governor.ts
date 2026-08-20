@@ -15,6 +15,7 @@ const CHECKSUM_PATTERN = /\b(?:sha(?:1|224|256|384|512)sum|md5sum|shasum|certuti
 const REPO_FORMAT_PATTERN =
   /\b(?:prettier|eslint|biome)\b[^\n]*(?:--write\s+\.\b|--fix\s+\.\b|\s\.\s*$)|\bcargo\s+fmt\b[^\n]*--all\b/i;
 const BROAD_LINT_PATTERN = /^\s*(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:lint|format)\s*$/i;
+const LONG_JOB_PATTERN = /\b(?:torchrun|deepspeed|accelerate\s+launch|sbatch|qsub)\b/i;
 const REPRO_MANIFEST_PATTERN = /\b(?:pip\s+freeze|conda\s+env\s+export|npm\s+shrinkwrap)\b/i;
 const REPRODUCTION_INTENT =
   /\b(?:please\s+)?(?:reproduce|replicate)\b|\b(?:run|execute)\b.{0,30}\b(?:official experiment|reference protocol|paper result|baseline)\b|(?:请|帮我|开始|继续|重新|运行|执行).{0,20}(?:复现|官方实验|论文实验|基准实验)/i;
@@ -67,6 +68,13 @@ export function evaluateResearchCommand(command: string, userPrompt: string): Ga
     return {
       block: true,
       reason: "Research Loop blocked repository-wide formatting or linting. Restrict it to the changed surface.",
+    };
+  }
+  if (LONG_JOB_PATTERN.test(command)) {
+    if (REPRODUCTION_INTENT.test(userPrompt)) return { block: false };
+    return {
+      block: true,
+      reason: "Research Loop blocked a likely long-running job. Ask before escalating cost.",
     };
   }
   return { block: false };

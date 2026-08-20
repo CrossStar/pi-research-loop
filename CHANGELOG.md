@@ -2,13 +2,6 @@
 
 All notable changes to Research Loop are documented in this file.
 
-## 0.3.1 - 2026-08-20
-
-### Fixed
-
-- Allow scheduler submissions such as `sbatch` and `qsub` in Experiment Mode instead of repeatedly blocking an unresolvable cost-approval gate.
-- Treat scheduler submissions as empirical work so Brainstorming and Exploration still require switching to Experiment first.
-
 ## 0.3.0 - 2026-08-20
 
 ### Work modes
