@@ -29,7 +29,7 @@ export function evaluateResearchFidelity(toolName, input, userPrompt) {
         return { block: false };
     return {
         block: true,
-        reason: "Research fidelity guard blocked an unapproved protocol reduction. State the reference scope, proposed scope, reason, and inferential limits, then obtain explicit user approval before changing it.",
+        reason: "This reproduction reduces samples, steps, seeds, or repeats without approval. Tell the user the original and proposed settings, why they would change, and how that affects the result, then obtain explicit approval.",
     };
 }
 export function evaluateResearchCommand(command, userPrompt) {
@@ -66,48 +66,32 @@ export function evaluateResearchCommand(command, userPrompt) {
     }
     return { block: false };
 }
-const BASE_POLICY = `Core constraints:
-- Optimize for time-to-insight without weakening the claim being tested.
-- Avoid unrelated refactors, broad validation, bookkeeping, and speculative infrastructure.
-- Ordinary conversation, code maintenance, documentation, and software validation are not experiments.
-
-Research fidelity:
-- For reproduction or reference comparisons, preserve data scope, split, sampling, preprocessing, model/checkpoint, objective, evaluation, seeds/repeats, and material hyperparameters.
-- Before execution, triangulate the official paper (including appendix/supplement), the repository README at the relevant commit/tag, and relevant open and closed GitHub issues.
-- Record exact citations, revisions, issue links, and source-specific protocol guidance. Disclose conflicts and ask the user when they materially change the target protocol.
-- A reduced wiring run is a separate diagnostic, never reproduction evidence. Disclose and obtain approval for every protocol deviation.`;
-const MODE_POLICY = {
-    normal: `Normal Mode:
-- Use ordinary collaboration: answer, implement, review, or maintain the project directly.
-- Do not add a special report structure or create a research checkpoint.
-- Switch mode only when the dominant work changes.`,
-    brainstorming: `Brainstorming Mode:
-- Expand the decision space before implementation: frame the problem, generate distinct options, compare tradeoffs, expose assumptions and unknowns, then recommend a direction.
-- Do not edit code or run empirical experiments by default.
-- Produce a compact Decision Map when the exploration converges.
-- Switch to Exploration for systematic code understanding, Normal for implementation, or Experiment when empirical evidence is required.`,
-    exploration: `Exploration Mode:
-- Build a researcher's minimum sufficient understanding of the project or experiment code; do not produce a file-by-file summary.
-- Include only information needed to write faithful pseudocode, reproduce the result, or interpret how a change could alter the scientific conclusion.
-- Produce an Experiment Blueprint covering objective, execution path, data pipeline, model/algorithm, pseudocode, loss, optimization, key hyperparameters, variables/controls, evaluation, randomness, artifacts, caveats, and unresolved source conflicts.
-- Prefer read-only inspection and static introspection. Before running anything that can produce scientific evidence, switch to Experiment Mode.`,
+const MODE_GUIDANCE = {
+    normal: "Work directly on the current request. Use the answer format that best fits it.",
+    brainstorming: "Compare genuinely different options and recommend a direction. Do not edit files or run empirical work in this mode.",
+    exploration: "Read only the code and materials relevant to the current objective. Trace the necessary behavior and return the findings directly with useful file references. Switch to Experiment before empirical work.",
 };
-function experimentPolicy(experiment) {
-    const plan = experiment
-        ? `\nActive experiment:\n- Title: ${experiment.title}\n- Question: ${experiment.question}\n- Intent: ${experiment.intent}\n- Planned data scope: ${experiment.plannedDataScope}${experiment.reference ? `\n- Reference: ${experiment.reference}` : ""}`
+function experimentGuidance(experiment) {
+    const details = experiment
+        ? [
+            `Title: ${experiment.title}`,
+            `Question: ${experiment.question}`,
+            `Intent: ${experiment.intent}`,
+            `Planned data: ${experiment.plannedDataScope}`,
+            ...(experiment.reference ? [`Reference: ${experiment.reference}`] : []),
+        ].join("\n")
         : "";
-    return `Experiment Mode:
-- Run empirical work needed to answer the declared Research Question. Multiple related experiments may share this mode.
-- Keep diagnostic and reproduction claims separate and curate only understood evidence.
-- Do not leave Experiment Mode silently. Finish with research_checkpoint, or use research_abort_experiment only when no interpretable evidence was produced.
-- Call research_checkpoint alone in its final tool batch when evidence changes the hypothesis, next experiments branch or materially increase cost, or uncertainty stops decreasing.
-- The checkpoint must report every completed experiment, actual scope, source coverage, protocol deviations, structured results, analysis, uncertainty, and next work.${plan}`;
+    const reproduction = experiment?.intent === "reproduction"
+        ? "\nBefore running this reproduction, check the official paper, the matching repository README, and relevant issues. Keep the referenced data, split, preprocessing, model or checkpoint, objective, evaluation, seeds, repeats, and material settings. Ask before changing them; a reduced run is diagnostic rather than a reproduction result."
+        : "";
+    return `Run the work needed to answer the experiment question and record what actually happened. Finish with research_checkpoint, or use research_abort_experiment only if no interpretable result was produced.${details ? `\n${details}` : ""}${reproduction}`;
 }
-export function researchPolicy(mode, actions, softReview, objective, experiment) {
-    const modePolicy = mode === "experiment" ? experimentPolicy(experiment) : MODE_POLICY[mode];
-    const objectiveLine = objective ? `\nCurrent objective: ${objective}\n` : "";
-    const review = softReview
-        ? "\n\nSOFT REVIEW:\nThis is a non-blocking semantic check, not a checkpoint trigger or action limit. Tool count cannot create checkpoint eligibility. Reassess evidence, uncertainty, branching, and next-experiment cost; continue the experiment uninterrupted when it is incomplete and no semantic checkpoint condition applies."
-        : "";
-    return `[RESEARCH LOOP | ${mode.toUpperCase()} MODE]\n\nRound activity: ${actions} tool actions. There is no hard action limit.${objectiveLine}\n${BASE_POLICY}\n\n${modePolicy}${review}`;
+export function researchPolicy(mode, _actions, _softReview, objective, experiment) {
+    const guidance = mode === "experiment" ? experimentGuidance(experiment) : MODE_GUIDANCE[mode];
+    return [
+        `[RESEARCH LOOP: ${mode.toUpperCase()}]`,
+        ...(objective ? [`Objective: ${objective}`] : []),
+        guidance,
+        "Start with the work or findings. Do not narrate Research Loop or mode changes unless the user needs to make a decision.",
+    ].join("\n");
 }

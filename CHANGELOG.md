@@ -2,6 +2,26 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.2.0 - Unreleased
+
+### Subagent support
+
+- Parent-owned read-only Subagent leases for built-in Explore and Plugin explorer/reviewer agents.
+- Dedicated `research-explorer` and `research-reviewer` Agent definitions.
+- Split dispatch, lease, and append-only artifact event persistence for concurrent Subagents.
+- Subagent lifecycle hooks, lifecycle ownership gates, and active-agent Status Line projection.
+
+### Lifecycle ownership
+
+- Lifecycle transitions now complete in their MCP handlers and wait for active Subagents.
+- Research Subagents inherit an immutable Work Mode lease and cannot mutate parent lifecycle state.
+
+### Agent guidance
+
+- Replace governance-heavy mode, Skill, and Subagent prompts with concise task-oriented guidance.
+- Stop reinjecting the full policy before every allowed tool call while retaining the existing tool restrictions.
+- Keep reproduction-setting reminders specific to active reproduction experiments.
+
 ## 0.1.3 - 2026-08-19
 
 ### Changed

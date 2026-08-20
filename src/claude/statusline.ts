@@ -61,10 +61,10 @@ async function main(): Promise<void> {
 async function formatResearchStatus(store: ClaudeStateStore): Promise<string> {
   if (!await store.hasActiveState()) return "";
   const core = await store.loadCore();
-  return renderRail(projectRail(core.snapshot()));
+  return renderRail(projectRail(core.snapshot(), await store.activeSubagentCount()));
 }
 
-function projectRail(snapshot: ResearchCoreSnapshot): RailProjection {
+function projectRail(snapshot: ResearchCoreSnapshot, activeSubagents: number): RailProjection {
   if (!snapshot.state.enabled) {
     return { mode: "off", details: [], accent: COLORS.muted, marker: "◇" };
   }
@@ -88,6 +88,7 @@ function projectRail(snapshot: ResearchCoreSnapshot): RailProjection {
     projection.accent = COLORS.amber;
     projection.details.push("review due");
   }
+  if (activeSubagents > 0) projection.details.push(count(activeSubagents, "agent"));
   return projection;
 }
 
@@ -96,7 +97,7 @@ function modeDetails(snapshot: ResearchCoreSnapshot): string[] {
     case "brainstorming":
       return ["read only"];
     case "exploration":
-      return ["blueprint"];
+      return ["read only"];
     case "experiment":
       return [
         snapshot.state.experiment?.intent.replace(/-/g, " ") ?? "experiment",

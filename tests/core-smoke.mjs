@@ -19,8 +19,19 @@ assert.equal(core.evaluateToolCall("Write", { file_path: "model.py" })?.block, t
 
 core.startTurn();
 assert.equal(core.enterMode("exploration", "Understand the experiment").block, false);
+assert.match(core.policy(), /Read only the code and materials relevant to the current objective/);
 assert.equal(core.evaluateToolCall("Read", { file_path: "train.py" }), undefined);
 assert.equal(core.evaluateToolCall("Bash", { command: "python train.py" })?.block, true);
+assert.equal(
+  core.evaluateToolCall("mcp__plugin-research-loop__research_mode", {
+    mode: "normal",
+    objective: "Implement the understood path",
+  }),
+  undefined,
+);
+assert.equal(core.lifecycleTransitionPending, true);
+assert.match(core.evaluateToolCall("Read", { file_path: "train.py" })?.reason, /transition to complete/);
+core.completeLifecycleTransition();
 
 core.startTurn();
 const experiment = {
@@ -31,6 +42,28 @@ const experiment = {
 };
 assert.equal(core.enterMode("experiment", "Measure convergence", experiment).block, false);
 assert.equal(core.enterMode("normal", "silently leave").block, true);
+
+const reproductionCore = new ResearchCore();
+reproductionCore.setEnabled(true);
+reproductionCore.resetRequest("Please reproduce the official experiment");
+assert.equal(reproductionCore.enterMode("experiment", "Reproduce the result", {
+  title: "Official result",
+  question: "Does the official result reproduce?",
+  intent: "reproduction",
+  plannedDataScope: "official dataset and split",
+  reference: "paper and repository",
+}).block, false);
+assert.match(reproductionCore.policy(), /check the official paper/);
+assert.equal(reproductionCore.evaluateToolCall("Bash", {
+  command: "python train.py --max_samples 100",
+})?.block, true);
+
+const approvedDiagnostic = new ResearchCore();
+approvedDiagnostic.setEnabled(true);
+approvedDiagnostic.resetRequest("Please reproduce the result, but first use a small-sample diagnostic");
+assert.equal(approvedDiagnostic.evaluateToolCall("Bash", {
+  command: "python train.py --max_samples 100",
+}), undefined);
 
 const checkpoint = {
   title: "Optimizer A converges faster in the diagnostic scope",

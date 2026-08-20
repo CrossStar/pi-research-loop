@@ -22,7 +22,7 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_mode",
     label: "Research Work Mode",
     description:
-      "Select the dominant work contract when Research Loop is on. Use Normal for direct work, Brainstorming for options and tradeoffs, Exploration for a researcher's Experiment Blueprint, and Experiment before empirical execution. Call this alone before mode-specific work.",
+      "Set the current Research Loop mode. Use Normal for direct work, Brainstorming to compare options, Exploration to read and understand code or materials, and Experiment before empirical execution. Call this alone, then proceed with the work.",
     parameters: Type.Object({
       mode: StringEnum(["normal", "brainstorming", "exploration", "experiment"] as const),
       objective: Type.String({ description: "Current objective that justifies this mode" }),

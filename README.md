@@ -3,9 +3,9 @@
 Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件，同时支持
 **Claude Code Plugin** 和 **Pi Extension**。
 
-它不替 Agent 做研究决策，而是为同一个主 Agent 提供可持续的 Research State、四种
-Work Mode、工具行为约束、Experiment 生命周期和结构化 Checkpoint。在实验产生 evidence
-后，Research Loop 会把控制权正式交还给用户。
+它不替 Agent 做研究决策，而是为同一个主 Agent 保存 Research State，提供四种 Work Mode、
+实际生效的工具限制，以及用于记录实验结果的 Checkpoint。普通调研直接围绕问题展开；只有
+真正运行实验时才要求记录实验设置和结果。
 
 ## 核心能力
 
@@ -14,10 +14,10 @@ Work Mode、工具行为约束、Experiment 生命周期和结构化 Checkpoint�
   Checkpoint 和 Artifact metadata。
 - **真实工具约束**：Claude Code 通过 `PreToolUse` Hook 执行 Governor，而不只依赖 Prompt。
 - **完整实验生命周期**：Experiment 必须通过 Checkpoint 或有效 Abort 正式结束。
-- **复现保真**：禁止静默缩小数据、改变 split、替换 checkpoint、减少 seeds 或修改其他
-  reference invariants。
-- **结构化 evidence**：Checkpoint 记录实验条件、协议来源、偏差、结果、分析、不确定性和
- 下一步决策。
+- **复现设置保护**：禁止未经用户同意缩小数据、改变 split、替换 checkpoint、减少 seeds
+  或修改其他关键设置；缩减运行必须明确作为 diagnostic。
+- **结构化 evidence**：Checkpoint 记录实际实验条件、参考来源、设置变化、结果、分析和
+  下一步。
 - **可见状态**：Claude Status Line 持续展示 mode、actions、artifacts、Soft Review 和
   active experiment。
 
@@ -26,7 +26,7 @@ Work Mode、工具行为约束、Experiment 生命周期和结构化 Checkpoint�
 | 能力 | Claude Code | Pi |
 | --- | --- | --- |
 | Research State 与 Work Modes | 支持 | 支持 |
-| Research Policy 持续注入 | Hooks | Context injection |
+| 当前模式提示 | Session/Prompt Hooks | Context injection |
 | Governor 工具约束 | `PreToolUse` | Pi tool gate |
 | Experiment lifecycle | MCP tools | Pi tools |
 | Research Checkpoint | Markdown report | TUI + Markdown report |
@@ -99,8 +99,23 @@ claude plugin marketplace remove research-loop
 
 ### Skill
 
-`skills/research-loop/SKILL.md` 是用户入口和 Research Policy 使用说明。四种 Work Mode
-始终是同一个主 session 的全局行为契约，不会被简单映射成四个 subagents。
+`skills/research-loop/SKILL.md` 是用户入口和使用说明。四种 Work Mode 表示同一个主 session
+当前正在做的工作，不会被简单映射成四个 subagents。Skill 要求 Agent 在模式切换后直接工作，
+不向用户复述内部流程。
+
+### Read-only Subagents
+
+Plugin 提供两个可选的只读 workers：
+
+| Agent | 用途 | 工具 |
+| --- | --- | --- |
+| `research-explorer` | 追踪执行路径、实验设置和实现事实 | Read、Grep、Glob |
+| `research-reviewer` | 核对指定方法、复现设置或结果解释 | Read、Grep、Glob |
+
+Claude 内置 `Explore` Agent 也可以作为只读 worker。Subagent 直接回答主会话给出的具体问题，
+不能切换模式、启停 Research Loop、提交 Checkpoint、运行实验或继续派生 Agent。主 Agent
+需要等 active Subagents 结束后再改变 Research Loop 状态。内部仍用 dispatch 和 lease 绑定
+并发 worker，但这些实现术语不会被反复注入 Agent 提示。
 
 ### MCP tools
 
@@ -128,9 +143,12 @@ research_abort_experiment
 | --- | --- |
 | `SessionStart` | 初始化或恢复 Research State，并注入当前状态 |
 | `SessionEnd` | 将 snapshot 标记为 inactive，避免显示过期状态 |
-| `UserPromptSubmit` | 记录用户请求、重置 round counters 并注入 Policy |
-| `PreToolUse` | 执行 Governor、fidelity guard 和 lifecycle gate |
-| `PostToolUse` | 为受支持的 Write/Edit 输出记录 artifact metadata |
+| `UserPromptSubmit` | 记录用户请求、重置 round counters 并注入一次简短模式提示 |
+| `PreToolUse` | 静默执行 Governor、复现设置检查、subagent 权限和状态转换检查；只在拒绝时返回原因 |
+| `PostToolUse` | 静默记录 parent/subagent artifact metadata；成功返回不提前回收尚待 `SubagentStart` 领取的 dispatch |
+| `PostToolUseFailure` | 回收失败的 Agent dispatch |
+| `SubagentStart` | 将 pending dispatch 绑定到 agent id 并注入一次任务和只读说明 |
+| `SubagentStop` | 关闭 lease，使 parent lifecycle 可以继续 |
 
 ### Status Line
 
@@ -141,8 +159,9 @@ Status Line：
   ╰─ ◇ research  off
   ╰─ ◇ research  normal  ·  2 actions  ·  1 output
   ╰─ ◇ research  brainstorming  ·  read only
-  ╰─ ◇ research  exploration  ·  blueprint
+  ╰─ ◇ research  exploration  ·  read only
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
+  ╰─ ◇ research  exploration  ·  read only  ·  2 agents
   ╰─ ◆ research  checkpoint  ·  2 results
 ```
 
@@ -177,23 +196,22 @@ Pi 中使用：
 
 ## Work Modes
 
-| Mode | 主要不确定性 | Agent 行为 | 主要产物 |
+| Mode | 当前工作 | Agent 行为 | 结果 |
 | --- | --- | --- | --- |
-| Normal | 目标明确 | 普通交流、实现、review 和维护 | 任务结果 |
-| Brainstorming | 不确定应选择哪个方向 | 发散方案、比较 trade-off、收敛决策 | Decision Map |
-| Exploration | 不理解项目或实验代码 | 提取与科学结论相关的最小充分实现 | Experiment Blueprint |
-| Experiment | 需要实际运行获得 evidence | 声明协议、执行实验、分析结果 | Research Checkpoint |
-
-Agent 根据主要不确定性选择模式：
+| Normal | 直接回答或实现 | 普通交流、实现、review 和维护 | 任务结果 |
+| Brainstorming | 比较可能方向 | 比较真正不同的方案并给出推荐 | 按问题组织的建议 |
+| Exploration | 理解代码或材料 | 定向读取、追踪行为并给出引用 | 相关发现 |
+| Experiment | 实际运行获得 evidence | 声明问题与计划、执行并记录结果 | Research Checkpoint |
 
 ```text
-选择不确定性      -> BRAINSTORMING
-代码事实不确定性  -> EXPLORATION
-经验事实不确定性  -> EXPERIMENT
-其他任务          -> NORMAL
+直接回答或实现 -> NORMAL
+比较可能方向   -> BRAINSTORMING
+理解代码或材料 -> EXPLORATION
+运行经验工作   -> EXPERIMENT
 ```
 
-Mode transition 只在主要行为契约发生变化时执行，不因单次文件读取或命令调用频繁切换。
+Agent 在模式切换工具完成后直接开始工作，不需要向用户播报模式或内部流程。只有工作类型变化时
+才切换 Mode，不因单次文件读取或命令调用频繁切换。
 
 ### Normal Mode
 
@@ -202,30 +220,13 @@ Research Checkpoint。
 
 ### Brainstorming Mode
 
-用于扩大并整理决策空间。Agent 应明确问题边界、候选方向、trade-off、关键假设、未知项和
-推荐方向。该模式默认不编辑代码，也不运行 empirical experiment。
+用于比较可能方向。Agent 应提出真正不同的候选方案，解释与当前选择有关的 trade-off，并给出
+推荐。回答结构随问题而定；该模式默认不编辑代码，也不运行 empirical experiment。
 
 ### Exploration Mode
 
-用于建立研究者所需的最小充分理解，而不是生成 file-by-file summary。Experiment Blueprint
-应覆盖：
-
-```text
-Research Objective
-Entry Point and Execution Path
-Data Pipeline
-Model / Algorithm
-Pseudocode
-Objective and Loss
-Optimization and Key Hyperparameters
-Variables, Controls, Baselines, Ablations
-Evaluation Protocol
-Randomness, Seeds, and Repeats
-Outputs and Artifacts
-Critical Implementation Details
-Source Conflicts and Unknowns
-```
-
+用于理解与当前问题有关的代码或材料，而不是生成 file-by-file summary。Agent 只追踪回答问题
+所需的执行路径、配置和关键实现，并直接给出发现及有用的文件引用；不强制生成固定 Blueprint。
 开始任何能够产生科学 evidence 的任务前，必须切换到 Experiment Mode。
 
 ### Experiment Mode
