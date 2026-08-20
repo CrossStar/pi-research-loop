@@ -43,7 +43,7 @@ assert.deepEqual(statusCalls.at(-1), { id: "research-loop", value: "◇ research
 runtime.setEnabled(true, ctx);
 assert.deepEqual(statusCalls.at(-1), {
   id: "research-loop",
-  value: "◇ research  normal · 0 actions · 0 outputs",
+  value: "◇ research  exploration · read only",
 });
 assert.equal(activeTools.includes("research_mode"), true);
 assert.match(notifications.at(-1).message, /Research Loop: ON/);
@@ -52,13 +52,13 @@ assert.equal(entries.at(-1).customType, "research-loop-state");
 runtime.evaluateToolCall("read", { path: "README.md" }, ctx);
 assert.deepEqual(statusCalls.at(-1), {
   id: "research-loop",
-  value: "◇ research  normal · 1 action · 0 outputs",
+  value: "◇ research  exploration · read only",
 });
 
-runtime.enterMode("exploration", "Map the implementation", undefined, ctx);
+runtime.enterMode("brainstorming", "Compare implementation paths", undefined, ctx);
 assert.deepEqual(statusCalls.at(-1), {
   id: "research-loop",
-  value: "◇ research  exploration · read only",
+  value: "◇ research  brainstorming · read only",
 });
 
 runtime.clearStatus(ctx);

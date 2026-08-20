@@ -55,16 +55,16 @@ research-loop/
 
 ### Skill
 
-`skills/research-loop/SKILL.md` 是用户入口和 Research Loop 使用说明。四种 Work Mode 表示
-同一主 session 当前正在做的工作，不是四个 subagents。模式切换后 Agent 直接开始任务，不向
-用户复述内部状态机制。
+`skills/research-loop/SKILL.md` 是用户入口和 Research Loop 使用说明。三种 Work Mode 表示
+同一主 session 当前正在做的研究工作，不是独立 subagents。模式切换后 Agent 直接开始任务，不向
+用户复述内部状态机制。启用后默认进入 Exploration；普通直接实现任务应关闭 Research Loop。
 
 ### MCP tools
 
 内置 stdio MCP server 暴露以下状态操作：
 
 - `research_set_enabled`：启用或关闭 Research Loop；
-- `research_mode`：切换 Normal、Brainstorming、Exploration 或 Experiment；
+- `research_mode`：切换 Brainstorming、Exploration 或 Experiment；
 - `research_state`：读取权威状态、active experiment、artifacts 和 policy；
 - `research_configure_statusline`：安装、检查或卸载 Claude Status Line；
 - `research_checkpoint`：验证并格式化 checkpoint，然后正式结束 Experiment；
@@ -136,7 +136,6 @@ Status Line 从共享 `ResearchCoreSnapshot` 读取，并以 Terminal Rail 形�
 
 ```text
   ╰─ ◇ research  off
-  ╰─ ◇ research  normal  ·  2 actions  ·  1 output
   ╰─ ◇ research  brainstorming  ·  read only
   ╰─ ◇ research  exploration  ·  read only
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
@@ -218,7 +217,7 @@ claude plugin validate --strict .claude-plugin/marketplace.json
 3. Subagent dispatch、lease、只读 gate、lifecycle ownership、并发 artifact events 和 cleanup
    smoke test；
 4. 通过官方 MCP SDK client 启动 bundled server，完成 enable → Experiment → checkpoint
-   → Normal，并验证 Status Line install、state rendering、已有 command composition 和
+   → Exploration，并验证 Status Line install、state rendering、已有 command composition 和
    uninstall restore。
 
 ## 第一版边界
@@ -233,7 +232,7 @@ enable
   -> enter Experiment
   -> execute and report evidence
   -> research_checkpoint
-  -> Normal
+  -> Exploration
 ```
 
 暂未作为第一优先级实现：

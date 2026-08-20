@@ -20,11 +20,11 @@ import {
   uninstallClaudeStatusLine,
 } from "./statusline-config.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const store = new ClaudeStateStore();
 const server = new McpServer({ name: "research-loop", version: VERSION });
 
-const modeSchema = z.enum(["normal", "brainstorming", "exploration", "experiment"]);
+const modeSchema = z.enum(["brainstorming", "exploration", "experiment"]);
 const intentSchema = z.enum(["reproduction", "diagnostic", "exploratory", "ablation"]);
 const sourceSchema = z.object({
   kind: z.enum(["paper", "readme", "issue"]),
@@ -100,7 +100,7 @@ server.registerTool(
   "research_set_enabled",
   {
     title: "Enable or disable Research Loop",
-    description: "Enable or disable the session-wide Research Loop state. Enabling always starts in Normal Mode.",
+    description: "Enable or disable the session-wide Research Loop state. Enabling always starts in Exploration Mode.",
     inputSchema: { enabled: z.boolean() },
   },
   async ({ enabled }) => {
@@ -232,7 +232,7 @@ server.registerTool(
   {
     title: "Reach Research Checkpoint",
     description:
-      "Record the completed runs and their results, end the active Experiment, and return Research Loop to Normal Mode. Reproduction entries must include their reference sources and any changed settings.",
+      "Record the completed runs and their results, end the active Experiment, and return Research Loop to Exploration Mode. Reproduction entries must include their reference sources and any changed settings.",
     inputSchema: {
       title: z.string().min(1),
       researchQuestion: z.string().min(1),

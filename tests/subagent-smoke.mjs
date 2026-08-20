@@ -63,7 +63,7 @@ try {
     hook_event_name: "PreToolUse",
     tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
     tool_use_id: "transition-while-agent-active",
-    tool_input: { mode: "normal", objective: "Implement next step" },
+    tool_input: { mode: "brainstorming", objective: "Compare next steps" },
   });
   assert.equal(blockedTransition.hookSpecificOutput.permissionDecision, "deny");
   assert.ok(blockedTransition.hookSpecificOutput.permissionDecisionReason);
@@ -131,7 +131,7 @@ try {
     hook_event_name: "PreToolUse",
     tool_name: "mcp__plugin_research-loop_research-loop__research_mode",
     tool_use_id: "transition-after-agent",
-    tool_input: { mode: "normal", objective: "Implement next step" },
+    tool_input: { mode: "brainstorming", objective: "Compare next steps" },
   }, false);
   const transitioningCore = await store.loadCore();
   assert.equal(transitioningCore.lifecycleTransitionPending, true);

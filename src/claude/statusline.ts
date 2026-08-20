@@ -35,7 +35,6 @@ interface RailProjection {
 
 const COLORS = {
   rose: { r: 252, g: 167, b: 234 },
-  blue: { r: 130, g: 170, b: 255 },
   green: { r: 195, g: 232, b: 141 },
   cyan: { r: 125, g: 207, b: 255 },
   amber: { r: 224, g: 175, b: 104 },
@@ -104,17 +103,11 @@ function modeDetails(snapshot: ResearchCoreSnapshot): string[] {
         count(snapshot.roundActions, "action"),
         count(snapshot.state.artifacts.length, "output"),
       ];
-    case "normal":
-      return [
-        count(snapshot.roundActions, "action"),
-        count(snapshot.state.artifacts.length, "output"),
-      ];
   }
 }
 
 function modeColor(mode: WorkMode): Rgb {
   return {
-    normal: COLORS.blue,
     brainstorming: COLORS.rose,
     exploration: COLORS.cyan,
     experiment: COLORS.green,

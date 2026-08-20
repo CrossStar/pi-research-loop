@@ -1,20 +1,20 @@
 ---
 name: research-loop
 description: Use when the user explicitly asks to enable, disable, or inspect Research Loop; configure its status line; choose a research mode; run a tracked experiment; reproduce a result; or finish an experiment with a checkpoint.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Research Loop
 
-Research Loop keeps one main Claude session in one of four modes: Normal, Brainstorming,
-Exploration, or Experiment. Choose the mode for the work currently needed. Do not map the modes to
-separate agents, and do not explain the mode machinery unless the user asks.
+Research Loop keeps one main Claude session in one of three modes: Brainstorming, Exploration, or
+Experiment. Choose the mode for the research work currently needed. Do not map the modes to separate
+agents, and do not explain the mode machinery unless the user asks.
 
 ## Start, stop, and inspect
 
-- Call `research_set_enabled` with `enabled: true` to start. It begins in Normal Mode.
+- Call `research_set_enabled` with `enabled: true` to start. It begins in Exploration Mode.
 - Call `research_state` when the saved mode or active experiment is unclear.
-- Disable Research Loop only after any active Experiment has ended.
+- Disable Research Loop for ordinary direct implementation, but only after any active Experiment has ended.
 
 For Status Line setup, call `research_configure_statusline` with `status`, `install`, or `uninstall`.
 Installation and removal require a Claude Code restart. The Status Line already displays the current
@@ -23,20 +23,17 @@ mode and activity, so do not repeat that status in normal answers.
 ## Choose a mode
 
 ```text
-direct answer or implementation -> Normal
-compare possible directions      -> Brainstorming
-understand code or materials     -> Exploration
-run empirical work               -> Experiment
+ordinary direct implementation -> Research Loop off
+compare possible directions     -> Brainstorming
+understand code or materials    -> Exploration
+run empirical work              -> Experiment
 ```
 
-When the kind of work changes, call `research_mode` before starting it. Make the mode change as its
-own tool call, then proceed without a verbal mode announcement. Do not switch modes for an
-individual read or command.
-
-### Normal
-
-Answer, implement, review, document, and validate software directly. Ordinary software tests do not
-require an experiment checkpoint.
+When the kind of research work changes, call `research_mode` before starting it. Make the mode change
+as its own tool call, then proceed without a verbal mode announcement. Do not switch modes for an
+individual read or command. Turn Research Loop off rather than selecting a mode for ordinary direct
+implementation, review, documentation, or software validation; these tasks do not require an
+experiment checkpoint.
 
 ### Brainstorming
 
@@ -92,4 +89,4 @@ Negative results, failed runs, and diagnostic observations are interpretable res
 something; include them in a checkpoint. Use `research_abort_experiment` only when there is no such
 result and attest `noInterpretableEvidence: true`.
 
-After checkpoint or valid abort, Research Loop returns to Normal Mode.
+After checkpoint or valid abort, Research Loop returns to Exploration Mode.

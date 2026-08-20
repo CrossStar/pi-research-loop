@@ -1,4 +1,4 @@
-export type WorkMode = "normal" | "brainstorming" | "exploration" | "experiment";
+export type WorkMode = "brainstorming" | "exploration" | "experiment";
 
 export type ExperimentIntent = "reproduction" | "diagnostic" | "exploratory" | "ablation";
 

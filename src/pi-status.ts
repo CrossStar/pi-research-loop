@@ -67,17 +67,11 @@ function modeDetails(snapshot: ResearchCoreSnapshot): string[] {
         count(snapshot.roundActions, "action"),
         count(snapshot.state.artifacts.length, "output"),
       ];
-    case "normal":
-      return [
-        count(snapshot.roundActions, "action"),
-        count(snapshot.state.artifacts.length, "output"),
-      ];
   }
 }
 
 function modeTone(mode: WorkMode): PiStatusColor {
   return {
-    normal: "accent",
     brainstorming: "warning",
     exploration: "accent",
     experiment: "success",

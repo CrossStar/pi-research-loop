@@ -22,9 +22,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
     name: "research_mode",
     label: "Research Work Mode",
     description:
-      "Set the current Research Loop mode. Use Normal for direct work, Brainstorming to compare options, Exploration to read and understand code or materials, and Experiment before empirical execution. Call this alone, then proceed with the work.",
+      "Set the current Research Loop mode. Use Brainstorming to compare options, Exploration to read and understand code or materials, and Experiment before empirical execution. Disable Research Loop for ordinary implementation work. Call this alone, then proceed with the work.",
     parameters: Type.Object({
-      mode: StringEnum(["normal", "brainstorming", "exploration", "experiment"] as const),
+      mode: StringEnum(["brainstorming", "exploration", "experiment"] as const),
       objective: Type.String({ description: "Current objective that justifies this mode" }),
       title: Type.Optional(Type.String({ description: "Experiment phase title; required for Experiment Mode" })),
       question: Type.Optional(Type.String({ description: "Research Question; required for Experiment Mode" })),

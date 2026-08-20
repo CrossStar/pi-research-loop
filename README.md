@@ -3,13 +3,13 @@
 Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件，同时支持
 **Claude Code Plugin** 和 **Pi Extension**。
 
-它不替 Agent 做研究决策，而是为同一个主 Agent 保存 Research State，提供四种 Work Mode、
+它不替 Agent 做研究决策，而是为同一个主 Agent 保存 Research State，提供三种 Work Mode、
 实际生效的工具限制，以及用于记录实验结果的 Checkpoint。普通调研直接围绕问题展开；只有
 真正运行实验时才要求记录实验设置和结果。
 
 ## 核心能力
 
-- **四种 Work Mode**：Normal、Brainstorming、Exploration 和 Experiment。
+- **三种 Work Mode**：Brainstorming、Exploration 和 Experiment。
 - **跨 Harness Research Core**：Claude Code 与 Pi 共享状态机、Governor、Policy、
   Checkpoint 和 Artifact metadata。
 - **真实工具约束**：Claude Code 通过 `PreToolUse` Hook 执行 Governor，而不只依赖 Prompt。
@@ -79,7 +79,7 @@ Research Loop Status Line was installed or migrated. Restart Claude Code once to
 /research-loop:research-loop
 ```
 
-Research Loop 默认关闭；启用后从 Normal Mode 开始。
+Research Loop 默认关闭；启用后从 Exploration Mode 开始。普通直接实现任务应保持关闭。
 
 ### 更新与卸载
 
@@ -99,8 +99,8 @@ claude plugin marketplace remove research-loop
 
 ### Skill
 
-`skills/research-loop/SKILL.md` 是用户入口和使用说明。四种 Work Mode 表示同一个主 session
-当前正在做的工作，不会被简单映射成四个 subagents。Skill 要求 Agent 在模式切换后直接工作，
+`skills/research-loop/SKILL.md` 是用户入口和使用说明。三种 Work Mode 表示同一个主 session
+当前正在做的工作，不会被简单映射成独立 subagents。Skill 要求 Agent 在模式切换后直接工作，
 不向用户复述内部流程。
 
 ### Read-only Subagents
@@ -157,7 +157,6 @@ Status Line：
 
 ```text
   ╰─ ◇ research  off
-  ╰─ ◇ research  normal  ·  2 actions  ·  1 output
   ╰─ ◇ research  brainstorming  ·  read only
   ╰─ ◇ research  exploration  ·  read only
   ╰─ ◆ research  experiment  ·  reproduction  ·  6 actions  ·  3 outputs
@@ -201,28 +200,26 @@ Rail 一致，同时使用当前 Pi theme 的语义色：
 
 ```text
 ◇ research  off
-◇ research  normal · 2 actions · 1 output
 ◇ research  brainstorming · read only
 ◇ research  exploration · read only
 ◆ research  experiment · reproduction · 6 actions · 3 outputs · review due
 ◆ research  checkpoint · 2 results
 ```
 
-Normal 和 Exploration 使用 accent，Brainstorming 和 soft review 使用 warning，Experiment 和
-Checkpoint 使用 success。扩展在 reload 时会清除旧 `belowEditor` widget，在 session shutdown
+Exploration 使用 accent，Brainstorming 和 soft review 使用 warning，Experiment 和 Checkpoint
+使用 success。扩展在 reload 时会清除旧 `belowEditor` widget，在 session shutdown
 时清理 footer status。
 
 ## Work Modes
 
 | Mode | 当前工作 | Agent 行为 | 结果 |
 | --- | --- | --- | --- |
-| Normal | 直接回答或实现 | 普通交流、实现、review 和维护 | 任务结果 |
 | Brainstorming | 比较可能方向 | 比较真正不同的方案并给出推荐 | 按问题组织的建议 |
 | Exploration | 理解代码或材料 | 定向读取、追踪行为并给出引用 | 相关发现 |
 | Experiment | 实际运行获得 evidence | 声明问题与计划、执行并记录结果 | Research Checkpoint |
 
 ```text
-直接回答或实现 -> NORMAL
+普通直接实现   -> RESEARCH OFF
 比较可能方向   -> BRAINSTORMING
 理解代码或材料 -> EXPLORATION
 运行经验工作   -> EXPERIMENT
@@ -231,10 +228,8 @@ Checkpoint 使用 success。扩展在 reload 时会清除旧 `belowEditor` widge
 Agent 在模式切换工具完成后直接开始工作，不需要向用户播报模式或内部流程。只有工作类型变化时
 才切换 Mode，不因单次文件读取或命令调用频繁切换。
 
-### Normal Mode
-
-用于目标明确的交流、实现、bug 修复、文档和 review。普通软件验证不是科研实验，也不会产生
-Research Checkpoint。
+Research Loop 不再为普通工作保留单独的 Mode。目标明确的实现、bug 修复、文档、review 和
+普通软件验证应关闭 Research Loop；它们不会产生 Research Checkpoint。
 
 ### Brainstorming Mode
 
@@ -259,7 +254,7 @@ Research Checkpoint。
 Experiment 不能静默退出：
 
 ```text
-EXPERIMENT -> research_checkpoint -> NORMAL
+EXPERIMENT -> research_checkpoint -> EXPLORATION
 ```
 
 只有完全没有产生 interpretable evidence 时，才能使用 `research_abort_experiment`。负结果、

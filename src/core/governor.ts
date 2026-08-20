@@ -81,7 +81,6 @@ export function evaluateResearchCommand(command: string, userPrompt: string): Ga
 }
 
 const MODE_GUIDANCE: Record<Exclude<WorkMode, "experiment">, string> = {
-  normal: "Work directly on the current request. Use the answer format that best fits it.",
   brainstorming:
     "Compare genuinely different options and recommend a direction. Do not edit files or run empirical work in this mode.",
   exploration:

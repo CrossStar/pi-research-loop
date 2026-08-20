@@ -67,7 +67,6 @@ export function evaluateResearchCommand(command, userPrompt) {
     return { block: false };
 }
 const MODE_GUIDANCE = {
-    normal: "Work directly on the current request. Use the answer format that best fits it.",
     brainstorming: "Compare genuinely different options and recommend a direction. Do not edit files or run empirical work in this mode.",
     exploration: "Read only the code and materials relevant to the current objective. Trace the necessary behavior and return the findings directly with useful file references. Switch to Experiment before empirical work.",
 };

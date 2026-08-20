@@ -75,13 +75,14 @@ export class ResearchCore {
 
   setEnabled(enabled: boolean): void {
     this.state.enabled = enabled;
-    this.state.workMode = "normal";
+    this.state.workMode = "exploration";
     this.state.objective = undefined;
     this.state.experiment = undefined;
     this.resetRound();
   }
 
   enterMode(mode: WorkMode, objective: string, experiment?: ExperimentContext): GateDecision {
+    if (!isWorkMode(mode)) return { block: true, reason: `Unknown Research Work Mode: ${String(mode)}.` };
     if (!this.state.enabled) return { block: true, reason: "Research Loop is off." };
     if (this.state.workMode === "experiment") {
       return {
@@ -104,7 +105,7 @@ export class ResearchCore {
     if (this.state.workMode !== "experiment") {
       return { block: true, reason: "No Experiment Mode is active." };
     }
-    this.state.workMode = "normal";
+    this.state.workMode = "exploration";
     this.state.objective = undefined;
     this.state.experiment = undefined;
     this.resetRound();
@@ -112,7 +113,7 @@ export class ResearchCore {
   }
 
   reachCheckpoint(resultCount: number): void {
-    this.state.workMode = "normal";
+    this.state.workMode = "exploration";
     this.state.objective = undefined;
     this.state.experiment = undefined;
     this.checkpointReached = true;
@@ -202,7 +203,7 @@ export class ResearchCore {
     ) {
       return {
         block: true,
-        reason: `${displayMode(this.state.workMode)} is read-oriented. Switch to Normal Mode before editing code.`,
+        reason: `${displayMode(this.state.workMode)} is read-oriented. Disable Research Loop before editing code, or enter Experiment Mode for empirical work.`,
       };
     }
 
@@ -271,8 +272,8 @@ export class ResearchCore {
   }
 
   restoreState(state: Partial<ResearchState>): void {
-    const restoredMode = isWorkMode(state.workMode) ? state.workMode : "normal";
-    const mode = restoredMode === "experiment" && !state.experiment ? "normal" : restoredMode;
+    const restoredMode = isWorkMode(state.workMode) ? state.workMode : "exploration";
+    const mode = restoredMode === "experiment" && !state.experiment ? "exploration" : restoredMode;
     this.state = {
       enabled: state.enabled ?? false,
       workMode: mode,
@@ -338,7 +339,7 @@ export class ResearchCore {
 }
 
 export function isWorkMode(value: unknown): value is WorkMode {
-  return value === "normal" || value === "brainstorming" || value === "exploration" || value === "experiment";
+  return value === "brainstorming" || value === "exploration" || value === "experiment";
 }
 
 export function displayMode(mode: WorkMode): string {
@@ -366,7 +367,7 @@ function extractCommand(input: unknown): string {
 }
 
 function defaultState(): ResearchState {
-  return { enabled: false, workMode: "normal", artifacts: [] };
+  return { enabled: false, workMode: "exploration", artifacts: [] };
 }
 
 function cloneState(state: ResearchState): ResearchState {

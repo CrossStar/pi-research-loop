@@ -12,7 +12,12 @@ import {
 const core = new ResearchCore();
 assert.equal(core.enabled, false);
 core.setEnabled(true);
-assert.equal(core.workMode, "normal");
+assert.equal(core.workMode, "exploration");
+
+const legacyCore = new ResearchCore({ enabled: true, workMode: "normal" });
+assert.equal(legacyCore.workMode, "exploration");
+assert.equal(core.enterMode("normal", "Use a removed mode").block, true);
+assert.equal(core.workMode, "exploration");
 
 assert.equal(core.enterMode("brainstorming", "Choose a model").block, false);
 assert.equal(core.evaluateToolCall("Write", { file_path: "model.py" })?.block, true);
@@ -24,8 +29,8 @@ assert.equal(core.evaluateToolCall("Read", { file_path: "train.py" }), undefined
 assert.equal(core.evaluateToolCall("Bash", { command: "python train.py" })?.block, true);
 assert.equal(
   core.evaluateToolCall("mcp__plugin-research-loop__research_mode", {
-    mode: "normal",
-    objective: "Implement the understood path",
+    mode: "brainstorming",
+    objective: "Compare the understood paths",
   }),
   undefined,
 );
@@ -41,7 +46,7 @@ const experiment = {
   plannedDataScope: "validation split, 100 samples, one seed",
 };
 assert.equal(core.enterMode("experiment", "Measure convergence", experiment).block, false);
-assert.equal(core.enterMode("normal", "silently leave").block, true);
+assert.equal(core.enterMode("exploration", "silently leave").block, true);
 
 const reproductionCore = new ResearchCore();
 reproductionCore.setEnabled(true);
@@ -61,6 +66,12 @@ assert.equal(reproductionCore.evaluateToolCall("Bash", {
 const approvedDiagnostic = new ResearchCore();
 approvedDiagnostic.setEnabled(true);
 approvedDiagnostic.resetRequest("Please reproduce the result, but first use a small-sample diagnostic");
+assert.equal(approvedDiagnostic.enterMode("experiment", "Run an approved diagnostic", {
+  title: "Small-sample diagnostic",
+  question: "Can the reproduction pipeline execute?",
+  intent: "diagnostic",
+  plannedDataScope: "100 samples",
+}).block, false);
 assert.equal(approvedDiagnostic.evaluateToolCall("Bash", {
   command: "python train.py --max_samples 100",
 }), undefined);
@@ -104,7 +115,7 @@ try {
 }
 
 core.reachCheckpoint(0);
-assert.equal(core.workMode, "normal");
+assert.equal(core.workMode, "exploration");
 assert.match(core.projectStatus().text, /CHECKPOINT REACHED/);
 
 console.log("core smoke test passed");

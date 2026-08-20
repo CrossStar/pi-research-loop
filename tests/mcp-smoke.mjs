@@ -43,7 +43,7 @@ const transport = new StdioClientTransport({
   args: [resolve("dist/claude/mcp-server.js")],
   env: environment,
 });
-const client = new Client({ name: "research-loop-smoke", version: "0.2.0" });
+const client = new Client({ name: "research-loop-smoke", version: "0.3.0" });
 
 try {
   await client.connect(transport);
@@ -143,7 +143,7 @@ try {
     arguments: {
       title: "MCP lifecycle closes correctly",
       researchQuestion: "Can the plugin complete an experiment lifecycle?",
-      hypothesis: "The MCP lifecycle returns to Normal after checkpoint.",
+      hypothesis: "The MCP lifecycle returns to Exploration after checkpoint.",
       experiments: [{
         title: "MCP smoke experiment",
         protocol: {
@@ -168,7 +168,7 @@ try {
   const state = await client.callTool({ name: "research_state", arguments: {} });
   const text = state.content.find((item) => item.type === "text")?.text ?? "";
   assert.match(text, /CHECKPOINT REACHED/);
-  assert.match(text, /"workMode": "normal"/);
+  assert.match(text, /"workMode": "exploration"/);
   const checkpointStatusLineText = await runStatusLine(
     join(environment.RESEARCH_LOOP_CLAUDE_HOME, "research-loop", "statusline.mjs"),
     project,

@@ -7,12 +7,12 @@ const plainTheme = { fg: (_color, text) => text };
 const off = new ResearchCore();
 assert.equal(renderPiResearchStatus(off.snapshot(), plainTheme), "◇ research  off");
 
-const normal = new ResearchCore();
-normal.setEnabled(true);
-normal.evaluateToolCall("read", { path: "README.md" });
+const defaultMode = new ResearchCore();
+defaultMode.setEnabled(true);
+defaultMode.evaluateToolCall("read", { path: "README.md" });
 assert.equal(
-  renderPiResearchStatus(normal.snapshot(), plainTheme),
-  "◇ research  normal · 1 action · 0 outputs",
+  renderPiResearchStatus(defaultMode.snapshot(), plainTheme),
+  "◇ research  exploration · read only",
 );
 
 const brainstorming = new ResearchCore();

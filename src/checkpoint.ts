@@ -144,8 +144,8 @@ export function registerResearchCheckpoint(
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "Record at least one completed empirical run, end the active Experiment, and return Research Loop to Normal Mode. Reproduction entries must include the official paper, matching repository README, relevant issue status, actual settings, and any changes from the reference. Call this alone as the final tool action.",
-    promptSnippet: "Record completed experiment results and return to Normal Mode",
+      "Record at least one completed empirical run, end the active Experiment, and return Research Loop to Exploration Mode. Reproduction entries must include the official paper, matching repository README, relevant issue status, actual settings, and any changes from the reference. Call this alone as the final tool action.",
+    promptSnippet: "Record completed experiment results and return to Exploration Mode",
     promptGuidelines: [
       "For a reproduction, consult the official paper (including appendix or supplement), the README for the matching repository revision, and relevant open or closed issues before execution. Record what each source contributed, the settings actually used, and every approved or unapproved change from the reference.",
     ],

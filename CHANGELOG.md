@@ -2,6 +2,14 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.3.0 - 2026-08-20
+
+### Work modes
+
+- Remove Normal Mode; Research Loop now exposes Brainstorming, Exploration, and Experiment.
+- Start enabled sessions in Exploration and return there after checkpoint or abort.
+- Treat ordinary implementation work as Research Loop OFF and migrate saved Normal state to Exploration.
+
 ## 0.2.0 - 2026-08-20
 
 ### Claude subagent support
