@@ -27,6 +27,10 @@ assert.equal(core.enterMode("exploration", "Understand the experiment").block, f
 assert.match(core.policy(), /Read only the code and materials relevant to the current objective/);
 assert.equal(core.evaluateToolCall("Read", { file_path: "train.py" }), undefined);
 assert.equal(core.evaluateToolCall("Bash", { command: "python train.py" })?.block, true);
+assert.match(
+  core.evaluateToolCall("Bash", { command: "sbatch repro/eval.sbatch" })?.reason,
+  /switch to Experiment Mode/,
+);
 assert.equal(
   core.evaluateToolCall("mcp__plugin-research-loop__research_mode", {
     mode: "brainstorming",
@@ -46,6 +50,12 @@ const experiment = {
   plannedDataScope: "validation split, 100 samples, one seed",
 };
 assert.equal(core.enterMode("experiment", "Measure convergence", experiment).block, false);
+assert.equal(
+  core.evaluateToolCall("Bash", {
+    command: "sbatch repro/official_models/eval_obfuscated_activations.sbatch",
+  }),
+  undefined,
+);
 assert.equal(core.enterMode("exploration", "silently leave").block, true);
 
 const reproductionCore = new ResearchCore();

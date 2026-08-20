@@ -16,7 +16,7 @@ import type {
 const SOFT_REVIEW_INTERVAL = 6;
 const MUTATING_TOOLS = new Set(["edit", "write", "multiedit", "notebookedit", "apply_patch"]);
 const EMPIRICAL_COMMAND =
-  /(?:^|\s)(?:pytest|tox|nox|cargo\s+(?:run|test|bench)|go\s+test|(?:npm|pnpm|yarn)\s+(?:test|run\s+(?:test|bench|benchmark|train|eval))|python(?:3)?\s+[^\n]*\.py\b|torchrun|deepspeed|accelerate\s+launch)(?:\s|$)/i;
+  /(?:^|\s)(?:pytest|tox|nox|cargo\s+(?:run|test|bench)|go\s+test|(?:npm|pnpm|yarn)\s+(?:test|run\s+(?:test|bench|benchmark|train|eval))|python(?:3)?\s+[^\n]*\.py\b|torchrun|deepspeed|accelerate\s+launch|sbatch|qsub)(?:\s|$)/i;
 
 export interface ResearchCoreSnapshot {
   schemaVersion: 1;
