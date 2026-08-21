@@ -10,8 +10,8 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 ## 核心能力
 
 - **三种 Work Mode**：Brainstorming、Exploration 和 Experiment。
-- **跨 Harness Research Core**：Claude Code 与 Pi 共享状态机、Governor、Policy、
-  Checkpoint 和 Artifact metadata。
+- **跨 Harness Research Core**：Claude Code 与 Pi 共享状态机、Governor、Policy 和
+  Artifact metadata；Pi 额外提供持久化 Markdown Checkpoint 与统一 Viewer。
 - **真实工具约束**：Claude Code 通过 `PreToolUse` Hook 执行 Governor，而不只依赖 Prompt。
 - **完整实验生命周期**：Experiment 必须通过 Checkpoint 或有效 Abort 正式结束。
 - **复现设置保护**：禁止未经用户同意缩小数据、改变 split、替换 checkpoint、减少 seeds
@@ -19,7 +19,7 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 - **真实用户决策**：Pi 对精确的成本升级和协议偏差显示同步确认；可选检测
   `ask_user_question`，在关键研究分支中使用结构化问答而不是猜测。
 - **结构化 evidence**：Checkpoint 记录实际实验条件、参考来源、设置变化、结果、分析和
-  下一步；Pi 同时生成 session-scoped localhost 网页报告。
+  下一步；Pi 将中文研究记录持久化为 Markdown，并由插件内唯一的 Viewer 统一阅读。
 - **可见状态**：Claude Status Line 持续展示 mode、actions、artifacts、Soft Review 和
   active experiment。
 
@@ -31,7 +31,7 @@ Research Loop 是一个面向科研 Agent 的 evidence-first 研究控制插件�
 | 当前模式提示 | Session/Prompt Hooks | Context injection |
 | Governor 工具约束 | `PreToolUse` | Pi tool gate |
 | Experiment lifecycle | MCP tools | Pi tools |
-| Research Checkpoint | Markdown report | TUI + Markdown + localhost HTML report |
+| Research Checkpoint | MCP Markdown report | 持久化 checkpoint.md + TUI 摘要 + localhost Viewer |
 | Artifact metadata | Write/Edit Hooks | Artifact Radar |
 | Artifact preview | Claude 原生文件读取 | Chafa 优先的图片、表格和网页 preview |
 | Status display | Claude Status Line | Pi footer status |
@@ -218,40 +218,83 @@ confirmation：批准后只放行该次 action；拒绝或取消会中止当前 
 拒绝，首次结果会明确禁止原样重试；如果 Agent 仍重复同一 tool call，第二次拒绝会主动中止
 当前 turn 并交还控制权。
 
-### Pi Checkpoint 网页报告
+### Pi Checkpoint Markdown 与 Viewer
 
-Pi session 启动时会在 `127.0.0.1` 上建立仅限当前 session 的内存报告服务。每次
-`research_checkpoint` 完成后，终端输出的最后一段会给出对应报告 URL；插件只显示链接，
-不会自动打开浏览器。URL 下方同时给出可直接复制到本地计算机执行的 SSH port-forward
-命令。报告复用 `src/checkpoint-report-template.html` 的 LaTeX-like 版式，支持按需出现的公式
-section、结构化表格、图片、折叠实验详情，以及带键名搜索、Tree/Raw 切换和大数组分段加载的
-JSON viewer。Checkpoint 没有 TeX 数学内容时，公式 section 和目录项不会生成。
+Pi 的 Checkpoint Writer 与 Viewer 完全分离。完成实验时，Agent 使用混合接口提交四段连续中文
+Markdown 正文，同时提交结构化 protocol、复现信息和 artifact metadata。插件将记录写入项目：
 
-服务默认从端口 `43119` 开始向上查找空闲端口。可通过环境变量修改起始端口：
-
-```bash
-RESEARCH_LOOP_CHECKPOINT_PORT=45000 pi -ne -e .
+```text
+checkpoints/
+└── checkpoint-20260821-234100-example/
+    └── checkpoint.md
 ```
 
-SSH 目标默认使用远端 `hostname`。如果本地 SSH config 使用 `moon` 之类的 alias，可以显式设置：
+`checkpoint.md` 包含 JSON-compatible frontmatter 和以下固定阅读结构：
 
-```bash
-RESEARCH_LOOP_SSH_HOST=moon pi -ne -e .
+```text
+Checkpoint：一句话标题
+1. 研究目的
+2. 实验设置
+3. 结果与分析
+4. 结论与下一步
+复现信息
 ```
 
-输出命令会自动使用报告实际端口，例如：
+正文中的项目相对 artifact 路径会在落盘时改写成相对于 `checkpoint.md` 的标准 Markdown 路径。
+图片、CSV、JSON、模型输出和日志不会复制到 checkpoint 目录；Markdown 直接引用实验产生的原始
+文件。重要 evidence 图片必须嵌入 `resultsMarkdown` 的对应分析位置，不能只出现在附件列表中。
 
-```bash
-ssh -N \\
-  -o RemoteCommand=none \\
-  -o RequestTTY=no \\
-  -L 43119:127.0.0.1:43119 \\
-  moon
+插件内部只维护一套 `src/checkpoint-report-template.html`。Viewer 每次读取项目中的 Markdown，
+因此字体、页面宽度、目录、表格、Figure caption、JSON 或代码样式更新后，所有历史 checkpoint
+立即使用新样式，不需要重新生成 HTML。主要路由为：
+
+```text
+/                   # checkpoint 历史
+/latest             # 永久指向最新 checkpoint
+/checkpoints/{id}   # 指定 checkpoint
+/api/checkpoints    # 自动发现的 metadata
+/artifacts/{path}   # 项目边界内的原始 artifact
 ```
 
-报告和当前 session 的 checkpoint history 只保存在内存中；session shutdown 时服务关闭并清空
-history，不向项目目录写入报告文件。服务只绑定 loopback，并使用随机 session path。模板当前的
-MathJax 与 KaTeX 字体资源来自 CDN，因此公式和 TeX 字体的首次加载需要网络。
+Viewer 支持 Markdown、MathJax、GFM 表格、Figure、右侧章节目录、历史浏览、JSON Tree/Raw 与
+键名搜索、CSV preview，以及轻量的 `checkpoint-chart`。展示型图表使用 JSON code fence：
+
+````markdown
+```checkpoint-chart
+{"type":"bar","title":"图 2　出现分化的实验数量","items":[{"label":"正常监督","value":0},{"label":"严格零相关监督","value":53}]}
+```
+
+图 2 显示分化集中出现在严格零相关监督条件下，这一结果提示监督条件改变了系统行为。
+
+---
+````
+
+真正的科研图表仍由实验代码生成并正常保存；不要为了 checkpoint 装饰额外写入小 PNG。
+
+Viewer 默认监听 `127.0.0.1`，从端口 `43119` 向上寻找空闲端口。可以配置：
+
+```bash
+RESEARCH_LOOP_CHECKPOINT_PORT=45000 RESEARCH_LOOP_SSH_HOST=moon pi -ne -e .
+```
+
+Checkpoint 完成后的固定入口和转发提示类似：
+
+```text
+✓ Experiment completed
+✓ Checkpoint generated
+
+Checkpoint:
+http://127.0.0.1:43119/latest
+
+ssh -N -o RemoteCommand=none -o RequestTTY=no -L 43119:127.0.0.1:43119 moon
+```
+
+通过 SSH 转发后，本地浏览器只需长期打开 `http://127.0.0.1:43119/latest` 并刷新。Viewer Server
+随 Pi session 启停，但 Markdown 历史长期保存在项目中。默认目录可用
+`RESEARCH_LOOP_CHECKPOINT_DIR` 改为项目内的其他相对路径。没有新 frontmatter 的旧 Markdown
+也会被宽容发现：标题取一级标题，时间取文件修改时间，结论从结论章节推断。
+
+模板当前的 MathJax 与 KaTeX 字体资源来自 CDN，因此公式和 TeX 字体的首次加载需要网络。
 
 ### Pi 图片渲染
 
@@ -338,18 +381,23 @@ Checkpoint 由研究语义触发，而不是固定 action 上限。典型触发�
 - uncertainty 不再下降；
 - 需要用户作出研究决策。
 
-Checkpoint 应包含：
+Pi Checkpoint 是简短、连续、可快速恢复上下文的中文科研记录，而不是实验日志。固定正文为：
 
-- Research Question 和 working hypothesis；
-- 每个已完成实验的实际 protocol；
-- data scope、sources 和 deviations；
-- observation、structured results 和 analysis；
-- strongest justified conclusion；
-- uncertainty、limitations 和 next step；
-- 仅包含能够解释且与结论相关的 artifacts。
+1. **研究目的**：前置现象、要区分的问题、解释 A/B 和双方预期；
+2. **实验设置**：只保留理解结果所需的条件、核心自变量、方法、参数、指标和判断标准；
+3. **结果与分析**：全文主体，按“现象 → 图表证据 → 图表含义 → 解释 → 局部结论”连续写作；
+4. **结论与下一步**：保守结论、关键证据、尚不能证明的内容和可区分机制的下一实验；
+5. **复现信息**：模型、revision、数据版本、commit、seeds、参数、环境、files、sources 和 deviations。
 
-`SOFT REVIEW` 只是非阻塞语义复盘提示，不会自动中断实验，也不会自动赋予 Checkpoint
-资格。
+每张重要图表必须直接嵌入相应分析段落，并形成独立的“图（表）→ 正式标题 → 解析”单元。
+标题遵循“上表下图”：表题位于表格上方，图题位于图片或动态图表下方；解析必须说明内容的研究
+含义，并在末尾用浅色分隔线与下一图表分开。Checkpoint 全文禁止使用“不是……而是……”及
+同类转折句式。完整路径和审计配置进入文末，不挤占正文。打开页面后第一屏会同时显示标题、实验
+metadata 和 `shortConclusion`。
+
+`SOFT REVIEW` 只是非阻塞语义复盘提示，不会自动中断实验，也不会自动赋予 Checkpoint 资格。
+Claude Code 当前仍使用原有 MCP 结构化 Markdown report；持久化项目 Markdown 与 Viewer 是 Pi
+adapter 的能力。
 
 ## Reproduction Fidelity
 
@@ -375,9 +423,13 @@ report。未获用户批准的 deviation 会显示为 protocol warning。
 
 ```text
 research-loop/
-├── src/core/       # Harness-neutral state、Governor、Policy、Checkpoint、Artifact metadata
-├── src/            # Pi adapter、Pi session persistence、TUI 和 artifact preview
-├── src/claude/     # Claude state store、Hooks、MCP server 和 Status Line
+├── src/core/                  # Harness-neutral state、Governor、Policy、Claude checkpoint types
+├── src/checkpoint-store.ts    # Pi Markdown writer、frontmatter、discovery 和兼容读取
+├── src/checkpoint-server.ts   # 单一 Viewer Server、Markdown renderer、artifact routes
+├── src/checkpoint-report-template.html # 插件内唯一 Viewer HTML/CSS/JS
+├── src/checkpoint.ts          # Pi hybrid writer schema、validation 和 TUI summary
+├── src/                       # Pi adapter、session persistence 和 artifact preview
+├── src/claude/                # Claude state store、Hooks、MCP server 和 Status Line
 ├── skills/         # Claude Code Research Loop Skill
 ├── hooks/          # Claude Code Hook registration
 └── .claude-plugin/ # Plugin manifest 和 Marketplace manifest
@@ -386,7 +438,10 @@ research-loop/
 Research Core 不依赖 Pi 或 Claude Code API。Adapter 只负责宿主注册、生命周期事件、状态持久化
 和体验层能力。
 
-详细迁移说明见 [`docs/claude-plugin.md`](docs/claude-plugin.md)。
+详细文档：
+
+- [`docs/checkpoint-viewer.md`](docs/checkpoint-viewer.md)：Pi Markdown Writer、Viewer、artifact 和 chart contract；
+- [`docs/claude-plugin.md`](docs/claude-plugin.md)：Claude Code Plugin 迁移与 adapter 说明。
 
 ## 本地开发
 
@@ -425,6 +480,10 @@ npm run build:claude
  后续计划中。
 - Claude Code Plugin manifest 尚不支持原生注册 Status Line，因此首次 `SessionStart` 会
   自动安装 renderer，但需要再重启一次 Claude Code 才能显示。
+- 持久化 `checkpoint.md` 与 Checkpoint Viewer 当前只在 Pi adapter 启用；Claude MCP 仍返回原有
+  Markdown report，不会写入 `checkpoints/`。
+- Viewer 的 MathJax 和 TeX web fonts 当前使用 CDN；无网络时正文、图片、表格和历史仍可阅读，
+  但公式与 TeX 字体会使用降级表现。
 
 ## 仓库
 

@@ -1,6 +1,6 @@
 {
   "name": "research-loop",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "An evidence-first research loop for Pi and Claude Code",
   "type": "module",
   "private": true,
@@ -22,7 +22,7 @@
     "statusline:install": "npm run build:claude && node dist/claude/statusline-cli.js install",
     "statusline:status": "node dist/claude/statusline-cli.js status",
     "statusline:uninstall": "node dist/claude/statusline-cli.js uninstall",
-    "test:pi": "node tests/pi-status-smoke.mjs && node tests/pi-runtime-smoke.mjs && node tests/checkpoint-server-smoke.mjs && node tests/terminal-image-smoke.mjs",
+    "test:pi": "node tests/pi-status-smoke.mjs && node tests/pi-runtime-smoke.mjs && node tests/pi-checkpoint-smoke.mjs && node tests/checkpoint-server-smoke.mjs && node tests/terminal-image-smoke.mjs",
     "test:claude": "npm run build:claude && node tests/core-smoke.mjs && node tests/hook-smoke.mjs && node tests/subagent-smoke.mjs && node tests/mcp-smoke.mjs"
   },
   "peerDependencies": {
@@ -41,5 +41,8 @@
     "typebox": "^1.3.7",
     "typescript": "^5.9.3",
     "zod": "^3.25.76"
+  },
+  "dependencies": {
+    "marked": "^18.0.10"
   }
 }

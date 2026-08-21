@@ -4,7 +4,8 @@ import { Container, Key, matchesKey, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { ArtifactRadar, formatSize, loadArtifactPreview } from "./artifacts.js";
 import { registerResearchCheckpoint } from "./checkpoint.js";
-import { CheckpointReportServer } from "./checkpoint-server.js";
+import { CheckpointViewerServer } from "./checkpoint-server.js";
+import { CheckpointStore } from "./checkpoint-store.js";
 import {
   POLICY_MESSAGE,
   ResearchRuntime,
@@ -16,7 +17,8 @@ const ASK_USER_BLOCKED_EVENT = "rpiv:ask-user:blocked";
 
 export default function researchLoop(pi: ExtensionAPI): void {
   const runtime = new ResearchRuntime(pi);
-  const checkpointServer = new CheckpointReportServer();
+  let checkpointStore: CheckpointStore | undefined;
+  let checkpointServer: CheckpointViewerServer | undefined;
   let radar: ArtifactRadar | undefined;
   let activeContext: ExtensionContext | undefined;
 
@@ -24,7 +26,17 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   registerResearchCheckpoint(pi, {
     getArtifacts,
-    publish: (details) => checkpointServer.publish(details),
+    async save(draft, artifacts, ctx) {
+      checkpointStore ??= new CheckpointStore(ctx.cwd);
+      checkpointServer ??= new CheckpointViewerServer(checkpointStore);
+      const stored = await checkpointStore.write(draft, artifacts);
+      try {
+        await checkpointServer.start();
+      } catch (error) {
+        ctx.ui.notify(`Checkpoint saved, but Viewer is unavailable: ${String(error)}`, "warning");
+      }
+      return { stored, viewerUrl: checkpointServer.latestUrl };
+    },
     onReached: (resultCount, ctx) => runtime.reachCheckpoint(resultCount, ctx),
   });
 
@@ -182,8 +194,10 @@ export default function researchLoop(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
     runtime.startSession(ctx);
+    checkpointStore = new CheckpointStore(ctx.cwd);
+    checkpointServer = new CheckpointViewerServer(checkpointStore);
     void checkpointServer.start().catch((error) => {
-      ctx.ui.notify(`Checkpoint web server unavailable: ${String(error)}`, "warning");
+      ctx.ui.notify(`Checkpoint Viewer unavailable: ${String(error)}`, "warning");
     });
 
     radar?.stop();
@@ -210,7 +224,9 @@ export default function researchLoop(pi: ExtensionAPI): void {
     radar?.stop();
     radar = undefined;
     activeContext = undefined;
-    await checkpointServer.stop();
+    await checkpointServer?.stop();
+    checkpointServer = undefined;
+    checkpointStore = undefined;
   });
 
   pi.on("before_agent_start", (event, ctx) => {

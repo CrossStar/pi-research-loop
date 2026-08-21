@@ -2,6 +2,21 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## 0.5.0 - 2026-08-21
+
+### Persistent Checkpoint Viewer
+
+- Separate Pi checkpoint content from presentation: write long-lived `checkpoints/*/checkpoint.md` research notes and keep one plugin-owned Viewer.
+- Replace the Pi checkpoint schema with a hybrid writer interface: four continuous Chinese Markdown sections plus structured protocol, reproduction and artifact metadata.
+- Add filesystem discovery with JSON-compatible frontmatter and tolerant fallback for ordinary legacy Markdown.
+- Add stable `/latest`, history `/`, per-checkpoint routes, API metadata, and symlink-aware project-bounded artifact serving without per-experiment HTML files.
+- Render Markdown, currency-safe MathJax, GFM tables, figures, dynamic bar/line `checkpoint-chart` blocks, JSON key search, Raw JSON and CSV previews in the unified academic Viewer.
+- Enforce formal visual units with titles above tables, titles below figures, a dedicated interpretation paragraph, and a light separator after each visual; reject “不是……而是……” and equivalent contrast constructions.
+- Use TeX Main for Latin text and SimSun/Songti for Chinese checkpoint prose, with restrained non-synthetic weights.
+- Print the complete SSH port-forward command on one copyable line.
+- Keep real experiment artifacts in their original locations and rewrite project-relative Markdown references instead of copying or base64-embedding them.
+- Keep this persistent writer/Viewer Pi-only for now; Claude MCP checkpoint behavior remains unchanged.
+
 ## 0.4.1 - 2026-08-21
 
 ### Checkpoint report fixes

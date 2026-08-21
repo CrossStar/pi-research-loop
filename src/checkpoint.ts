@@ -1,146 +1,39 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { realpath, stat } from "node:fs/promises";
+import { basename, extname, relative, resolve, sep } from "node:path";
 import { Type } from "typebox";
-import {
-  formatSize,
-  loadArtifactPreview,
-  loadArtifactReportPreview,
-  resolveArtifactRecord,
-  type ArtifactRecord,
-  type ArtifactPreview,
-} from "./artifacts.js";
-import {
-  formatCheckpointReport as formatCoreCheckpointReport,
-  formatExperimentDetails,
-  formatProtocolDeviations,
-  formatProtocolSources,
-  formatResultTable,
-  normalizeCheckpointExperiment as normalizeCoreCheckpointExperiment,
-} from "./core/checkpoint.js";
+import { loadArtifactPreview, resolveArtifactRecord, type ArtifactRecord } from "./artifacts.js";
 import { formatSshPortForwardCommand } from "./checkpoint-server.js";
+import {
+  validateCheckpointDraft,
+  type CheckpointArtifactInput,
+  type CheckpointDraft,
+  type PreparedCheckpointArtifact,
+  type StoredCheckpoint,
+} from "./checkpoint-store.js";
 import { createTerminalImage } from "./terminal-image.js";
 
-export type ResearchResultRole = "evidence" | "diagnostic" | "dataset" | "intermediate";
-export type ExperimentVariableRole = "independent" | "dependent" | "control" | "derived";
-export type ExperimentIntent = "reproduction" | "diagnostic" | "exploratory" | "ablation";
-export type ProtocolSourceKind = "paper" | "readme" | "issue";
-export type ProtocolSourceStatus = "consulted" | "not-found" | "inaccessible";
-
-export interface CheckpointResultInput {
-  path: string;
-  title: string;
-  role: ResearchResultRole;
-  description: string;
-  takeaway?: string;
-  columns?: string[];
-  experiment?: string;
-}
-
-export interface CheckpointResult {
-  path: string;
-  artifact: ArtifactRecord;
-  absolutePath: string;
-  url: string;
-  title: string;
-  role: ResearchResultRole;
-  description: string;
-  takeaway?: string;
-  columns?: string[];
-  experiment?: string;
-  preview?: string;
-  reportPreview?: string;
-  image?: ArtifactPreview["image"];
-}
-
-export interface ExperimentVariable {
-  name: string;
-  role: ExperimentVariableRole;
-  description: string;
-  value?: string;
-}
-
-export interface ExperimentSetupDetail {
-  name: string;
-  value: string;
-  description?: string;
-}
-
-export interface ExperimentParameter {
-  name: string;
-  value: string;
-  rationale?: string;
-}
-
-export interface ResultTableCell {
-  text?: string;
-  value?: number;
-  unit?: string;
-  significantDigits?: number;
-}
-
-export interface ExperimentResultTable {
-  title?: string;
-  columns: string[];
-  rows: ResultTableCell[][];
-}
-
-export interface ProtocolDeviation {
-  field: string;
-  reference: string;
-  actual: string;
-  reason: string;
-  approvedByUser: boolean;
-}
-
-export interface ProtocolSource {
-  kind: ProtocolSourceKind;
-  status: ProtocolSourceStatus;
-  reference?: string;
-  summary: string;
-}
-
-export interface ExperimentProtocol {
-  intent: ExperimentIntent;
-  reference?: string;
-  dataScope: string;
-  sources: ProtocolSource[];
-  deviations: ProtocolDeviation[];
-}
-
-export interface CheckpointExperiment {
-  title: string;
-  protocol: ExperimentProtocol;
-  rationale: string;
-  design: string;
-  setup: ExperimentSetupDetail[];
-  variables: ExperimentVariable[];
-  parameters: ExperimentParameter[];
-  observation: string;
-  tables: ExperimentResultTable[];
-  analysis: string;
-}
-
-export interface CheckpointDetails {
-  title: string;
-  researchQuestion: string;
-  hypothesis: string;
-  experiments: CheckpointExperiment[];
-  overallAnalysis: string;
-  conclusion?: string;
-  uncertainty: string;
-  next: string;
-  results: CheckpointResult[];
-  reportUrl?: string;
-  portForwardCommand?: string;
+interface SavedCheckpoint {
+  stored: StoredCheckpoint;
+  viewerUrl?: string;
 }
 
 interface CheckpointDependencies {
   getArtifacts: () => ArtifactRecord[];
-  publish: (details: CheckpointDetails) => Promise<string | undefined>;
+  save: (
+    draft: CheckpointDraft,
+    artifacts: PreparedCheckpointArtifact[],
+    ctx: ExtensionContext,
+  ) => Promise<SavedCheckpoint>;
   onReached: (resultCount: number, ctx: ExtensionContext) => void;
+}
+
+interface CheckpointToolDetails extends SavedCheckpoint {
+  draft: CheckpointDraft;
+  artifacts: PreparedCheckpointArtifact[];
+  portForwardCommand?: string;
 }
 
 export function registerResearchCheckpoint(
@@ -151,165 +44,138 @@ export function registerResearchCheckpoint(
     name: "research_checkpoint",
     label: "Research Checkpoint",
     description:
-      "Record at least one completed empirical run, end the active Experiment, and return Research Loop to Exploration Mode. Reproduction entries must include the official paper, matching repository README, relevant issue status, actual settings, and any changes from the reference. Call this alone as the final tool action.",
-    promptSnippet: "Record completed experiment results and return to Exploration Mode",
+      "Write a persistent Chinese Markdown research note for the completed experiment, save it under checkpoints/, and return Research Loop to Exploration Mode. The four Markdown bodies must read as a concise continuous research note rather than a log. Important figures must be referenced in resultsMarkdown. Call this alone as the final tool action.",
+    promptSnippet: "Write the completed experiment as a persistent Markdown checkpoint",
     promptGuidelines: [
-      "For a reproduction, consult the official paper (including appendix or supplement), the README for the matching repository revision, and relevant open or closed issues before execution. Record what each source contributed, the settings actually used, and every approved or unapproved change from the reference.",
+      "Write primarily in natural Chinese. Use Chinese (English term) the first time a necessary technical term appears, then use the Chinese term consistently.",
+      "The four bodies map to 研究目的、实验设置、结果与分析、结论与下一步. Do not repeat those level-one or level-two headings inside the bodies.",
+      "ResultsMarkdown must be the longest section and follow 实验现象 → 图表证据 → 图表含义 → 结果解释 → 局部结论. Every visual must form an independent 图（表）→ 正式标题 → 解析 unit, followed by a standalone --- separator before the next visual.",
+      "Follow 上表下图：write a table title above the Markdown table as ### 表 N　标题; put a figure title below the image by using 图 N　标题 as the Markdown image caption. Do not place a ### 图 heading above an image. After each table, image, or checkpoint-chart, write a prose paragraph explaining what its content means.",
+      "Never use the Chinese contrast construction 不是……而是…… or close variants such as 并非……而是……、不在于……而在于……、而不是 and 而非 anywhere in a checkpoint. State the observation and conclusion directly.",
+      "Keep only result-essential settings in setupMarkdown. Put model revision, data revision, commit, seeds, full paths and audit details in structured reproduction/protocol fields.",
+      "Use a fenced checkpoint-chart block containing JSON for lightweight presentation-only bar or line charts. Never create a PNG solely for checkpoint decoration.",
+      "For a reproduction, record paper, README and issue coverage plus every approved or unapproved deviation.",
     ],
     parameters: Type.Object({
-      title: Type.String({ description: "Concise finding-oriented checkpoint title, without the 'Checkpoint:' prefix" }),
-      researchQuestion: Type.String({ description: "Research question and the distinction this interval is trying to resolve" }),
-      hypothesis: Type.String({ description: "Current working hypothesis after considering this interval's evidence" }),
-      experiments: Type.Array(
+      title: Type.String({ description: "一句话概括本次实验及最重要现象，不加 Checkpoint 前缀" }),
+      experimentId: Type.Optional(Type.String({ description: "Stable experiment/run identifier when one exists" })),
+      shortConclusion: Type.String({ description: "第一屏显示的一句话最保守结论" }),
+      purposeMarkdown: Type.String({
+        description: "研究目的正文：前置现象、要区分的问题、解释 A/B、核心假设及双方预期；不要包含二级标题",
+      }),
+      setupMarkdown: Type.String({
+        description: "实验设置正文：系统、任务、主要条件差异、方法、必要参数、指标与预先判断标准；不要堆砌审计信息",
+      }),
+      resultsMarkdown: Type.String({
+        description:
+          "结果与分析正文，也是全文主体。表格使用上方三级标题“### 表 N　标题”；图片 caption 使用“图 N　标题”，由 Viewer 显示在图下方。每个表格、图片或 checkpoint-chart 后必须单独写解析段落并添加 ---。图片目标使用 artifacts 中的项目相对路径。轻量图表可使用 ```checkpoint-chart 后跟 JSON，其 title 必须是“图 N　标题”；bar 格式为 {type,title,items:[{label,value,color?}]}，line 格式为 {type,title,series:[{name,color?,points:[{x,y}]}]}",
+      }),
+      conclusionMarkdown: Type.String({
+        description: "结论与下一步正文：最终结论、关键证据、不能证明的内容、保守表述以及能直接区分机制的下一实验",
+      }),
+      protocols: Type.Array(
         Type.Object({
-          title: Type.String({ description: "Short experiment name, without numbering" }),
-          protocol: Type.Object({
-            intent: StringEnum(["reproduction", "diagnostic", "exploratory", "ablation"] as const, {
-              description: "Scientific intent. A diagnostic cannot be presented as reproduction evidence.",
+          title: Type.String({ description: "Protocol/run label" }),
+          intent: StringEnum(["reproduction", "diagnostic", "exploratory", "ablation"] as const),
+          reference: Type.Optional(Type.String({ description: "Reference protocol, paper, baseline or official run" })),
+          dataScope: Type.String({ description: "Actual dataset, split, sample count and sampling scope" }),
+          sources: Type.Array(
+            Type.Object({
+              kind: StringEnum(["paper", "readme", "issue"] as const),
+              status: StringEnum(["consulted", "not-found", "inaccessible"] as const),
+              reference: Type.Optional(Type.String()),
+              summary: Type.String({ description: "Guidance, correction, conflict, bug or documented search outcome" }),
             }),
-            reference: Type.Optional(Type.String({ description: "Reference paper, official run, baseline, or protocol being followed" })),
-            dataScope: Type.String({ description: "Actual dataset, split, sample count, and sampling scope used" }),
-            sources: Type.Array(
-              Type.Object({
-                kind: StringEnum(["paper", "readme", "issue"] as const, {
-                  description: "Reproduction source category",
-                }),
-                status: StringEnum(["consulted", "not-found", "inaccessible"] as const, {
-                  description: "Whether the source was reviewed or why it was unavailable",
-                }),
-                reference: Type.Optional(Type.String({ description: "Exact paper citation/URL, README revision/path, or issue URL/number" })),
-                summary: Type.String({ description: "Protocol guidance, correction, known bug, conflict, or documented search outcome" }),
-              }),
-              {
-                maxItems: 12,
-                description: "Sources checked for this experiment. Reproductions require paper, README, and issue-search coverage.",
-              },
-            ),
-            deviations: Type.Array(
-              Type.Object({
-                field: Type.String({ description: "Protocol field that differs, such as sample count, split, model, preprocessing, or seeds" }),
-                reference: Type.String({ description: "Reference protocol value" }),
-                actual: Type.String({ description: "Value actually used" }),
-                reason: Type.String({ description: "Why the deviation was made and what it limits" }),
-                approvedByUser: Type.Boolean({ description: "Whether the user explicitly approved this deviation before execution" }),
-              }),
-              { maxItems: 12, description: "All deviations from the referenced protocol; empty only when none exist" },
-            ),
-          }),
-          rationale: Type.String({ description: "Why this experiment was needed in the research sequence" }),
-          design: Type.String({ description: "Self-contained narrative of conditions, controls, sample, and comparison" }),
-          setup: Type.Optional(
-            Type.Array(
-              Type.Object({
-                name: Type.String({ description: "Essential setup component such as model, dataset, loss, optimizer, or evaluation protocol" }),
-                value: Type.String({ description: "Component choice or configuration" }),
-                description: Type.Optional(Type.String({ description: "Why this detail matters" })),
-              }),
-              { maxItems: 12, description: "Essential experiment context, excluding infrastructure" },
-            ),
+            { maxItems: 12 },
           ),
-          variables: Type.Optional(
-            Type.Array(
-              Type.Object({
-                name: Type.String({ description: "Variable name" }),
-                role: StringEnum(["independent", "dependent", "control", "derived"] as const),
-                description: Type.String({ description: "What the variable represents" }),
-                value: Type.Optional(Type.String({ description: "Fixed value, levels, or range" })),
-              }),
-              { maxItems: 12, description: "Variables necessary to interpret the experiment" },
-            ),
+          deviations: Type.Array(
+            Type.Object({
+              field: Type.String(),
+              reference: Type.String(),
+              actual: Type.String(),
+              reason: Type.String(),
+              approvedByUser: Type.Boolean(),
+            }),
+            { maxItems: 12 },
           ),
-          parameters: Type.Optional(
-            Type.Array(
-              Type.Object({
-                name: Type.String({ description: "Experiment hyperparameter name" }),
-                value: Type.String({ description: "Value used" }),
-                rationale: Type.Optional(Type.String({ description: "Why this value matters" })),
-              }),
-              {
-                maxItems: 12,
-                description: "Experiment-only hyperparameters. Exclude Slurm, queue, allocation, logging, and orchestration settings.",
-              },
-            ),
-          ),
-          observation: Type.String({ description: "Observed result before interpretation" }),
-          tables: Type.Optional(
-            Type.Array(
-              Type.Object({
-                title: Type.Optional(Type.String({ description: "Short table title or lead-in" })),
-                columns: Type.Array(Type.String(), { minItems: 1, maxItems: 6 }),
-                rows: Type.Array(
-                  Type.Array(
-                    Type.Object({
-                      text: Type.Optional(Type.String({ description: "Text cell; use when the cell is not numeric" })),
-                      value: Type.Optional(Type.Number({ description: "Numeric cell value" })),
-                      unit: Type.Optional(Type.String({ description: "Optional unit appended to a numeric value" })),
-                      significantDigits: Type.Optional(
-                        Type.Integer({ minimum: 1, maximum: 8, description: "Significant digits justified by the measurement" }),
-                      ),
-                    }),
-                    { minItems: 1, maxItems: 6 },
-                  ),
-                  { maxItems: 20 },
-                ),
-              }),
-              { maxItems: 4, description: "Structured result tables rendered directly in the terminal" },
-            ),
-          ),
-          analysis: Type.String({ description: "Interpretation, causal limits, and what this experiment adds" }),
         }),
-        { minItems: 1, maxItems: 6, description: "Key empirical experiments actually completed in this interval, in execution order" },
+        { minItems: 1, maxItems: 6 },
       ),
-      overallAnalysis: Type.String({ description: "Synthesis across experiments and how the evidence updates the hypothesis" }),
-      conclusion: Type.Optional(Type.String({ description: "Strongest conclusion currently justified, stated in one compact passage" })),
-      uncertainty: Type.String({ description: "Unresolved confounders, limitations, and generalization gaps" }),
-      next: Type.String({ description: "Concrete next experiment or user decision, including secondary priority when useful" }),
-      results: Type.Optional(
+      reproduction: Type.Object({
+        model: Type.String({ description: "Model or system name; use not-applicable when appropriate" }),
+        modelRevision: Type.String({ description: "Model revision/checkpoint/tag" }),
+        dataset: Type.String({ description: "Dataset, environment or task" }),
+        dataRevision: Type.String({ description: "Dataset revision/split/version" }),
+        codeCommit: Type.String({ description: "Git commit or exact code version" }),
+        seeds: Type.Array(Type.String(), { maxItems: 24 }),
+        parameters: Type.Array(
+          Type.Object({ name: Type.String(), value: Type.String() }),
+          { maxItems: 24, description: "Audit-level key parameters" },
+        ),
+        environment: Type.Optional(Type.String({ description: "GPU/node/runtime when useful" })),
+      }),
+      artifacts: Type.Optional(
         Type.Array(
           Type.Object({
-            path: Type.String({ description: "Path to a result file or dataset directory" }),
-            title: Type.String({ description: "Human-readable artifact title" }),
-            role: StringEnum(["evidence", "diagnostic", "dataset", "intermediate"] as const, {
-              description: "How this artifact participates in the checkpoint",
-            }),
-            description: Type.String({ description: "Why this artifact exists and how it relates to the evidence" }),
-            takeaway: Type.Optional(Type.String({ description: "What the user should notice" })),
-            columns: Type.Optional(Type.Array(Type.String(), { maxItems: 6, description: "Relevant preview columns" })),
-            experiment: Type.Optional(Type.String({ description: "Exact experiment title this artifact belongs to" })),
+            path: Type.String({ description: "Project-relative path to a real experiment artifact" }),
+            title: Type.String(),
+            role: StringEnum(["evidence", "diagnostic", "dataset", "intermediate"] as const),
+            description: Type.String({ description: "One sentence explaining the artifact's research purpose" }),
+            takeaway: Type.Optional(Type.String()),
+            columns: Type.Optional(Type.Array(Type.String(), { maxItems: 8 })),
           }),
-          { maxItems: 8, description: "Curated artifacts only; omit files whose purpose is not understood" },
+          { maxItems: 16, description: "Real experiment artifacts only; no checkpoint-only decorative images" },
         ),
       ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const results = await prepareCheckpointResults(pi, ctx, dependencies.getArtifacts(), params.results);
-      const experiments = params.experiments.map((experiment) =>
-        normalizeCheckpointExperiment(experiment, params.hypothesis),
-      );
-      const details: CheckpointDetails = {
-        title: params.title,
-        researchQuestion: params.researchQuestion,
-        hypothesis: params.hypothesis,
-        experiments,
-        overallAnalysis: params.overallAnalysis,
-        conclusion: params.conclusion,
-        uncertainty: params.uncertainty,
-        next: params.next,
-        results,
-      };
+      let artifacts: PreparedCheckpointArtifact[];
       try {
-        details.reportUrl = await dependencies.publish(details);
-        if (details.reportUrl) details.portForwardCommand = formatSshPortForwardCommand(details.reportUrl);
+        artifacts = await prepareCheckpointArtifacts(
+          pi,
+          ctx,
+          dependencies.getArtifacts(),
+          params.artifacts as CheckpointArtifactInput[] | undefined,
+        );
       } catch (error) {
-        ctx.ui.notify(`Checkpoint web report unavailable: ${String(error)}`, "warning");
+        return failure(`Checkpoint artifacts could not be prepared: ${String(error)}`);
       }
-      dependencies.onReached(results.length, ctx);
-      const report = formatCheckpointReport(details);
-      const text = details.reportUrl
-        ? `${report}\n\nRendered checkpoint: ${details.reportUrl}\n${details.portForwardCommand ?? ""}`.trimEnd()
-        : report;
+      const draft: CheckpointDraft = {
+        title: params.title,
+        experimentId: params.experimentId,
+        shortConclusion: params.shortConclusion,
+        purposeMarkdown: params.purposeMarkdown,
+        setupMarkdown: params.setupMarkdown,
+        resultsMarkdown: params.resultsMarkdown,
+        conclusionMarkdown: params.conclusionMarkdown,
+        protocols: params.protocols,
+        reproduction: params.reproduction,
+      };
+      const validation = validateCheckpointDraft(draft, artifacts);
+      if (validation.errors.length) return failure(validation.errors.join("\n"));
+      validation.warnings.forEach((warning) => ctx.ui.notify(warning, "warning"));
+
+      let saved: SavedCheckpoint;
+      try {
+        saved = await dependencies.save(draft, artifacts, ctx);
+      } catch (error) {
+        return failure(`Checkpoint Markdown could not be saved: ${String(error)}`);
+      }
+      const portForwardCommand = saved.viewerUrl
+        ? formatSshPortForwardCommand(saved.viewerUrl)
+        : undefined;
+      dependencies.onReached(artifacts.length, ctx);
+      const details: CheckpointToolDetails = { draft, artifacts, ...saved, portForwardCommand };
+      const lines = [
+        "✓ Experiment completed",
+        "✓ Checkpoint generated",
+        "",
+        `Saved: ${saved.stored.relativeMarkdownPath}`,
+        saved.viewerUrl ? `\nCheckpoint:\n${saved.viewerUrl}` : undefined,
+        portForwardCommand ? `\n${portForwardCommand}` : undefined,
+      ].filter((line): line is string => line !== undefined);
       return {
-        content: [{ type: "text" as const, text }],
+        content: [{ type: "text" as const, text: lines.join("\n") }],
         details,
         terminate: true,
       };
@@ -318,165 +184,107 @@ export function registerResearchCheckpoint(
       return new Text(theme.fg("toolTitle", theme.bold("Research Checkpoint")), 0, 0);
     },
     renderResult(result, _options, theme) {
-      const details = result.details as CheckpointDetails | undefined;
+      const details = result.details as CheckpointToolDetails | undefined;
       if (!details) return new Text("Research checkpoint reached.", 0, 0);
-      return renderCheckpoint(details, theme);
+      return renderCheckpointResult(details, theme);
     },
   });
 }
 
-export function normalizeCheckpointExperiment(
-  experiment: Omit<CheckpointExperiment, "setup" | "variables" | "parameters" | "tables"> &
-    Partial<Pick<CheckpointExperiment, "setup" | "variables" | "parameters" | "tables">>,
-  hypothesis: string,
-): CheckpointExperiment {
-  return normalizeCoreCheckpointExperiment(experiment, hypothesis);
-}
-
-export function formatCheckpointReport(details: CheckpointDetails): string {
-  return formatCoreCheckpointReport(details);
-}
-
-async function prepareCheckpointResults(
+async function prepareCheckpointArtifacts(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   discovered: ArtifactRecord[],
-  requestedResults: CheckpointResultInput[] | undefined,
-): Promise<CheckpointResult[]> {
-  const results: CheckpointResult[] = [];
-  for (const requested of requestedResults ?? []) {
-    const resolvedRecord = await resolveArtifactRecord(ctx.cwd, requested.path);
-    if (!resolvedRecord) continue;
+  requested: CheckpointArtifactInput[] | undefined,
+): Promise<PreparedCheckpointArtifact[]> {
+  const prepared: PreparedCheckpointArtifact[] = [];
+  const projectRoot = resolve(ctx.cwd);
+  const realProjectRoot = await realpath(projectRoot);
+  for (const item of requested ?? []) {
+    const requestedPath = item.path.startsWith("@") ? item.path.slice(1) : item.path;
+    const requestedAbsolutePath = resolve(projectRoot, requestedPath);
+    if (requestedAbsolutePath !== projectRoot && !requestedAbsolutePath.startsWith(`${projectRoot}${sep}`)) {
+      throw new Error(`Artifact must stay inside the project: ${item.path}`);
+    }
+    const resolvedRecord = await resolveCheckpointArtifactRecord(ctx.cwd, requestedPath);
+    if (!resolvedRecord) throw new Error(`Artifact does not exist or is not a file/dataset: ${item.path}`);
     const absolutePath = resolve(ctx.cwd, resolvedRecord.path);
+    const realArtifactPath = await realpath(absolutePath);
+    if (realArtifactPath !== realProjectRoot && !realArtifactPath.startsWith(`${realProjectRoot}${sep}`)) {
+      throw new Error(`Artifact must stay inside the project: ${item.path}`);
+    }
     const artifact = discovered.find((candidate) => resolve(ctx.cwd, candidate.path) === absolutePath) ?? resolvedRecord;
-    const result: CheckpointResult = {
-      path: artifact.path,
-      artifact,
-      absolutePath,
-      url: pathToFileURL(absolutePath).href,
-      title: requested.title,
-      role: requested.role,
-      description: requested.description,
-      takeaway: requested.takeaway,
-      columns: requested.columns,
-      experiment: requested.experiment,
-    };
-    if (requested.role !== "intermediate") {
+    const result: PreparedCheckpointArtifact = { ...item, artifact, absolutePath };
+    if (artifact.kind === "file" && [".png", ".jpg", ".jpeg"].includes(artifact.extension)) {
       try {
-        const preview = await loadArtifactPreview(pi, ctx.cwd, artifact, requested.columns);
-        result.preview = preview.image ? undefined : preview.text;
+        const preview = await loadArtifactPreview(pi, ctx.cwd, artifact, item.columns);
         result.image = preview.image;
-        result.reportPreview = await loadArtifactReportPreview(ctx.cwd, artifact).catch(() => undefined);
       } catch {
-        // The semantic description and file link remain useful without a preview.
+        // The persistent Markdown reference remains authoritative without a terminal preview.
       }
     }
-    results.push(result);
+    prepared.push(result);
   }
-  return results;
+  return prepared;
 }
 
-function renderCheckpoint(details: CheckpointDetails, theme: Theme): Container {
+async function resolveCheckpointArtifactRecord(cwd: string, inputPath: string): Promise<ArtifactRecord | undefined> {
+  const known = await resolveArtifactRecord(cwd, inputPath);
+  if (known) return known;
+  const absolutePath = resolve(cwd, inputPath);
+  try {
+    const fileStat = await stat(absolutePath);
+    if (!fileStat.isFile()) return undefined;
+    return {
+      kind: "file",
+      path: relative(cwd, absolutePath).split(sep).join("/"),
+      name: basename(absolutePath),
+      extension: extname(absolutePath).toLowerCase(),
+      size: fileStat.size,
+      mtimeMs: fileStat.mtimeMs,
+      discoveredAt: Date.now(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function renderCheckpointResult(details: CheckpointToolDetails, theme: Theme): Container {
   const container = new Container();
-  const appendResult = (result: CheckpointResult, index: number) => {
-    const semantics = [
-      `${theme.fg("muted", result.role.toUpperCase())} | ${result.description}`,
-      result.takeaway ? `${theme.fg("success", "Takeaway")} ${result.takeaway}` : undefined,
-      terminalLink(result.url, `${result.artifact.name} (${formatSize(result.artifact.size)})`),
-      theme.fg("muted", result.absolutePath),
-    ].filter((line): line is string => Boolean(line));
-    container.addChild(new Text(`${theme.bold(`${index + 1}. ${result.title}`)}\n${semantics.join("\n")}`, 0, 1));
-    if (result.image) {
-      container.addChild(
-        createTerminalImage(
-          result.image.data,
-          result.image.mimeType,
-          { fallbackColor: (value) => theme.fg("muted", value) },
-          {
-            maxWidthCells: 72,
-            maxHeightCells: 24,
-            filename: result.artifact.name,
-            chafaFormat: "sixels",
-          },
-        ),
-      );
-    } else if (result.preview) container.addChild(new Text(result.preview, 0, 1));
-  };
-
-  container.addChild(new Text(theme.fg("accent", theme.bold(`Checkpoint: ${details.title}`)), 0, 0));
-  container.addChild(new Text(theme.fg("accent", theme.bold("Research Question")), 0, 1));
-  container.addChild(new Text([details.researchQuestion, "", theme.bold("Working hypothesis"), details.hypothesis].join("\n"), 0, 0));
-  container.addChild(new Text(theme.fg("accent", theme.bold("Condition & Result")), 0, 1));
-
-  details.experiments.forEach((experiment, experimentIndex) => {
+  container.addChild(new Text(theme.fg("success", theme.bold("✓ Experiment completed\n✓ Checkpoint generated")), 0, 0));
+  container.addChild(new Text(theme.bold(details.draft.title), 0, 1));
+  container.addChild(new Text(details.draft.shortConclusion, 0, 0));
+  details.artifacts.filter((item) => item.image && item.role === "evidence").forEach((item) => {
+    container.addChild(new Text(`${theme.bold(item.title)}\n${item.description}`, 0, 1));
     container.addChild(
-      new Text(
-        [
-          theme.fg("accent", theme.bold(`Experiment ${experimentIndex + 1} - ${experiment.title}`)),
-          experiment.rationale,
-          "",
-          experiment.design,
-        ].join("\n"),
-        0,
-        1,
+      createTerminalImage(
+        item.image!.data,
+        item.image!.mimeType,
+        { fallbackColor: (value) => theme.fg("muted", value) },
+        { maxWidthCells: 72, maxHeightCells: 24, filename: item.artifact.name, chafaFormat: "sixels" },
       ),
     );
-    const experimentDetails = formatExperimentDetails(experiment);
-    if (experimentDetails) container.addChild(new Text(`${theme.bold("Experimental Details")}\n${experimentDetails}`, 0, 1));
-    const protocolSources = formatProtocolSources(experiment);
-    if (protocolSources) container.addChild(new Text(`${theme.bold("Reference Sources")}\n${protocolSources}`, 0, 1));
-    const protocolDeviations = formatProtocolDeviations(experiment);
-    if (protocolDeviations) {
-      container.addChild(new Text(`${theme.fg("warning", theme.bold("Protocol Deviations"))}\n${protocolDeviations}`, 0, 1));
-    }
-    container.addChild(new Text(experiment.observation, 0, 1));
-    experiment.tables.forEach((table) => {
-      const title = table.title ? `${theme.bold(table.title)}\n` : "";
-      container.addChild(new Text(`${title}${formatResultTable(table)}`, 0, 1));
-    });
-    container.addChild(new Text(experiment.analysis, 0, 1));
-    details.results.filter((result) => result.experiment === experiment.title).forEach(appendResult);
   });
-
-  const experimentTitles = new Set(details.experiments.map((experiment) => experiment.title));
-  const unassignedResults = details.results.filter(
-    (result) => !result.experiment || !experimentTitles.has(result.experiment),
-  );
-  if (unassignedResults.length > 0) {
-    container.addChild(new Text(theme.fg("accent", theme.bold("Additional Evidence")), 0, 1));
-    unassignedResults.forEach(appendResult);
-  }
-
-  container.addChild(new Text(theme.fg("accent", theme.bold("Overall Analysis")), 0, 1));
-  container.addChild(
-    new Text(
-      [details.overallAnalysis, details.conclusion ? `\n> ${details.conclusion}` : undefined]
-        .filter((line): line is string => Boolean(line))
-        .join("\n"),
-      0,
-      0,
-    ),
-  );
-  container.addChild(new Text(theme.fg("warning", theme.bold("Uncertainty")), 0, 1));
-  container.addChild(new Text(details.uncertainty, 0, 0));
-  container.addChild(new Text(theme.fg("accent", theme.bold("Next")), 0, 1));
-  container.addChild(new Text(details.next, 0, 0));
-
-  if (details.results.length > 0) {
-    const links = details.results.map((result) => `- ${terminalLink(result.url, result.artifact.path)}`);
-    container.addChild(new Text(`${theme.fg("accent", theme.bold("Relevant Artifacts"))}\n${links.join("\n")}`, 0, 1));
-  }
-  if (details.reportUrl) {
-    const forwarding = details.portForwardCommand ? `\n${details.portForwardCommand}` : "";
+  container.addChild(new Text(`${theme.fg("muted", "Saved")} ${details.stored.relativeMarkdownPath}`, 0, 1));
+  if (details.viewerUrl) {
+    const command = details.portForwardCommand ? `\n${details.portForwardCommand}` : "";
     container.addChild(
       new Text(
-        `${theme.fg("accent", theme.bold("Rendered Checkpoint"))}\n${terminalLink(details.reportUrl, details.reportUrl)}${forwarding}`,
+        `${theme.fg("accent", theme.bold("Checkpoint"))}\n${terminalLink(details.viewerUrl, details.viewerUrl)}${command}`,
         0,
         1,
       ),
     );
   }
   return container;
+}
+
+function failure(text: string) {
+  return {
+    content: [{ type: "text" as const, text }],
+    details: { accepted: false },
+    isError: true,
+  };
 }
 
 function terminalLink(url: string, label: string): string {

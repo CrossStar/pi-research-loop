@@ -1,6 +1,6 @@
 {
   "name": "research-loop",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Evidence-first research work modes, lifecycle governance, and checkpoints for Claude Code",
   "author": {
     "name": "CrossStar",
