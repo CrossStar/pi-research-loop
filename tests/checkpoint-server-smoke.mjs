@@ -177,12 +177,24 @@ await new Promise((resolveListen, rejectListen) => {
   blocker.listen(0, "127.0.0.1", resolveListen);
 });
 const blockedPort = blocker.address().port;
+const templatePath = resolve("src/checkpoint-report-template.html");
+const previousHost = process.env.RESEARCH_LOOP_CHECKPOINT_HOST;
+process.env.RESEARCH_LOOP_CHECKPOINT_HOST = "0.0.0.0";
+assert.equal(new CheckpointViewerServer(store, { templatePath }).host, "0.0.0.0");
+process.env.RESEARCH_LOOP_CHECKPOINT_HOST = "localhost";
+assert.throws(() => new CheckpointViewerServer(store, { templatePath }), /must be 127\.0\.0\.1 or 0\.0\.0\.0/);
+if (previousHost === undefined) delete process.env.RESEARCH_LOOP_CHECKPOINT_HOST;
+else process.env.RESEARCH_LOOP_CHECKPOINT_HOST = previousHost;
+
 const server = new CheckpointViewerServer(store, {
   basePort: blockedPort,
-  templatePath: resolve("src/checkpoint-report-template.html"),
+  host: "127.0.0.1",
+  templatePath,
 });
 try {
   await server.start();
+  assert.equal(server.host, "127.0.0.1");
+  assert.equal(server.exposedToNetwork, false);
   assert.match(server.latestUrl, /^http:\/\/127\.0\.0\.1:\d+\/latest$/);
   assert.notEqual(new URL(server.latestUrl).port, String(blockedPort));
   const origin = server.origin;
@@ -232,6 +244,23 @@ try {
   assert.equal([403, 404].includes(traversal.status), true);
   const symlinkEscape = await fetch(`${origin}/artifacts/escape/secret.json`);
   assert.equal(symlinkEscape.status, 403);
+
+  const networkServer = new CheckpointViewerServer(store, {
+    basePort: blockedPort <= 65400 ? blockedPort + 100 : blockedPort - 100,
+    host: "0.0.0.0",
+    templatePath,
+  });
+  try {
+    await networkServer.start();
+    assert.equal(networkServer.host, "0.0.0.0");
+    assert.equal(networkServer.exposedToNetwork, true);
+    const healthUrl = new URL("/health", networkServer.origin);
+    healthUrl.hostname = "127.0.0.1";
+    const health = await fetch(healthUrl).then((response) => response.json());
+    assert.equal(health.ok, true);
+  } finally {
+    await networkServer.stop();
+  }
 } finally {
   await server.stop();
   await new Promise((resolveClose) => blocker.close(resolveClose));

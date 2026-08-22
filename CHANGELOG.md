@@ -2,12 +2,26 @@
 
 All notable changes to Research Loop are documented in this file.
 
-## Unreleased
+## 0.5.1 - 2026-08-22
 
 ### Pi experiment code
 
 - Inject a focused Experiment Mode code contract that prioritizes researcher readability, direct execution, Rich phase summaries, tqdm progress, centralized parameters, explicit randomness, inspectable intermediate results, predictable artifacts, and restrained architecture.
 - Document the same contract in `docs/experiment-code.md` without adding a framework or runtime abstraction layer.
+
+### Viewer binding
+
+- Add `RESEARCH_LOOP_CHECKPOINT_HOST` with strict `127.0.0.1` (default) and opt-in `0.0.0.0` values.
+- Warn when the unauthenticated Viewer is exposed on all IPv4 interfaces while retaining loopback plus SSH forwarding as the recommended remote workflow.
+
+### Research execution
+
+- Allow long-running, distributed, and scheduled Experiment Mode commands to start without a separate cost confirmation.
+- Retain explicit approval for reproduction protocol deviations such as reduced samples, steps, seeds, or repeats.
+
+### Documentation
+
+- Refocus the repository README on the Pi plugin, including installation, updates, removal, work modes, checkpoints, artifacts, configuration, development, and security guidance.
 
 ## 0.5.0 - 2026-08-21
 

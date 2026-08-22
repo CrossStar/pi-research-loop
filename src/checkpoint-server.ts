@@ -8,14 +8,18 @@ import { fileURLToPath } from "node:url";
 import { Marked, Renderer, type Tokens } from "marked";
 import { CheckpointStore, type DiscoveredCheckpoint } from "./checkpoint-store.js";
 
-const HOST = "127.0.0.1";
+const DEFAULT_HOST = "127.0.0.1";
+const ALL_INTERFACES_HOST = "0.0.0.0";
 const DEFAULT_BASE_PORT = 43119;
 const MAX_PORT_ATTEMPTS = 100;
 const MAX_JSON_PREVIEW_BYTES = 32 * 1024 * 1024;
 const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024;
 
+export type CheckpointViewerHost = "127.0.0.1" | "0.0.0.0";
+
 export interface CheckpointViewerServerOptions {
   basePort?: number;
+  host?: CheckpointViewerHost;
   template?: string;
   templatePath?: string;
 }
@@ -28,6 +32,7 @@ interface TocEntry {
 
 /** One plugin-owned Viewer for all persistent Markdown checkpoints in a project. */
 export class CheckpointViewerServer {
+  readonly host: CheckpointViewerHost;
   private readonly basePort: number;
   private readonly templateOverride?: string;
   private readonly templatePath: string;
@@ -39,6 +44,7 @@ export class CheckpointViewerServer {
     readonly store: CheckpointStore,
     options: CheckpointViewerServerOptions = {},
   ) {
+    this.host = options.host ?? envHost();
     this.basePort = normalizeBasePort(options.basePort ?? envBasePort());
     this.templateOverride = options.template;
     this.templatePath = options.templatePath
@@ -46,7 +52,13 @@ export class CheckpointViewerServer {
   }
 
   get origin(): string | undefined {
-    return this.port === undefined ? undefined : `http://${HOST}:${this.port}`;
+    if (this.port === undefined) return undefined;
+    const accessHost = this.host === ALL_INTERFACES_HOST ? hostname() : this.host;
+    return `http://${accessHost}:${this.port}`;
+  }
+
+  get exposedToNetwork(): boolean {
+    return this.host === ALL_INTERFACES_HOST;
   }
 
   get latestUrl(): string | undefined {
@@ -85,7 +97,7 @@ export class CheckpointViewerServer {
       if (port > 65535) break;
       const server = this.createHttpServer(template);
       try {
-        await listen(server, port);
+        await listen(server, port, this.host);
         server.unref();
         this.server = server;
         this.port = port;
@@ -100,13 +112,13 @@ export class CheckpointViewerServer {
 
     const server = this.createHttpServer(template);
     try {
-      await listen(server, 0);
+      await listen(server, 0, this.host);
       server.unref();
       this.server = server;
       this.port = (server.address() as AddressInfo).port;
     } catch (error) {
       server.close();
-      throw new Error("Could not bind a localhost Checkpoint Viewer.", { cause: lastError ?? error });
+      throw new Error(`Could not bind the Checkpoint Viewer to ${this.host}.`, { cause: lastError ?? error });
     }
   }
 
@@ -125,7 +137,7 @@ export class CheckpointViewerServer {
       return;
     }
 
-    const url = new URL(request.url ?? "/", `http://${HOST}`);
+    const url = new URL(request.url ?? "/", `http://${DEFAULT_HOST}`);
     if (url.pathname === "/health") {
       send(response, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true }), request.method === "HEAD");
       return;
@@ -484,6 +496,12 @@ function mimeType(extension: string): string {
   } as Record<string, string>)[extension.toLowerCase()] ?? "application/octet-stream";
 }
 
+function envHost(): CheckpointViewerHost {
+  const configured = process.env.RESEARCH_LOOP_CHECKPOINT_HOST?.trim() || DEFAULT_HOST;
+  if (configured === DEFAULT_HOST || configured === ALL_INTERFACES_HOST) return configured;
+  throw new Error(`RESEARCH_LOOP_CHECKPOINT_HOST must be ${DEFAULT_HOST} or ${ALL_INTERFACES_HOST}: ${configured}`);
+}
+
 function envBasePort(): number {
   const configured = Number.parseInt(process.env.RESEARCH_LOOP_CHECKPOINT_PORT ?? "", 10);
   return Number.isInteger(configured) ? configured : DEFAULT_BASE_PORT;
@@ -493,7 +511,7 @@ function normalizeBasePort(value: number): number {
   return Number.isInteger(value) && value >= 1024 && value <= 65535 ? value : DEFAULT_BASE_PORT;
 }
 
-function listen(server: Server, port: number): Promise<void> {
+function listen(server: Server, port: number, host: CheckpointViewerHost): Promise<void> {
   return new Promise((resolveListen, reject) => {
     const onError = (error: Error) => {
       server.off("listening", onListening);
@@ -505,7 +523,7 @@ function listen(server: Server, port: number): Promise<void> {
     };
     server.once("error", onError);
     server.once("listening", onListening);
-    server.listen(port, HOST);
+    server.listen(port, host);
   });
 }
 

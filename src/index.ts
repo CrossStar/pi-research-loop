@@ -21,17 +21,34 @@ export default function researchLoop(pi: ExtensionAPI): void {
   let checkpointServer: CheckpointViewerServer | undefined;
   let radar: ArtifactRadar | undefined;
   let activeContext: ExtensionContext | undefined;
+  let viewerExposureWarned = false;
 
   const getArtifacts = () => radar?.getArtifacts() ?? runtime.artifacts;
+  const warnViewerExposure = (server: CheckpointViewerServer, ctx: ExtensionContext) => {
+    if (!server.exposedToNetwork || viewerExposureWarned) return;
+    viewerExposureWarned = true;
+    ctx.ui.notify(
+      "Checkpoint Viewer is listening on 0.0.0.0 without authentication. Use this only on a trusted network; SSH forwarding with 127.0.0.1 remains the safer default.",
+      "warning",
+    );
+  };
 
   registerResearchCheckpoint(pi, {
     getArtifacts,
     async save(draft, artifacts, ctx) {
       checkpointStore ??= new CheckpointStore(ctx.cwd);
-      checkpointServer ??= new CheckpointViewerServer(checkpointStore);
       const stored = await checkpointStore.write(draft, artifacts);
+      if (!checkpointServer) {
+        try {
+          checkpointServer = new CheckpointViewerServer(checkpointStore);
+        } catch (error) {
+          ctx.ui.notify(`Checkpoint saved, but Viewer configuration is invalid: ${String(error)}`, "warning");
+          return { stored };
+        }
+      }
       try {
         await checkpointServer.start();
+        warnViewerExposure(checkpointServer, ctx);
       } catch (error) {
         ctx.ui.notify(`Checkpoint saved, but Viewer is unavailable: ${String(error)}`, "warning");
       }
@@ -193,12 +210,20 @@ export default function researchLoop(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
+    viewerExposureWarned = false;
     runtime.startSession(ctx);
     checkpointStore = new CheckpointStore(ctx.cwd);
-    checkpointServer = new CheckpointViewerServer(checkpointStore);
-    void checkpointServer.start().catch((error) => {
-      ctx.ui.notify(`Checkpoint Viewer unavailable: ${String(error)}`, "warning");
-    });
+    try {
+      checkpointServer = new CheckpointViewerServer(checkpointStore);
+      void checkpointServer.start().then(() => {
+        if (checkpointServer) warnViewerExposure(checkpointServer, ctx);
+      }).catch((error) => {
+        ctx.ui.notify(`Checkpoint Viewer unavailable: ${String(error)}`, "warning");
+      });
+    } catch (error) {
+      checkpointServer = undefined;
+      ctx.ui.notify(`Checkpoint Viewer configuration is invalid: ${String(error)}`, "warning");
+    }
 
     radar?.stop();
     radar = new ArtifactRadar(ctx.cwd, runtime.artifacts, (artifact, isNew) => {

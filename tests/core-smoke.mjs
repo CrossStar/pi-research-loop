@@ -50,12 +50,10 @@ const experiment = {
   plannedDataScope: "validation split, 100 samples, one seed",
 };
 assert.equal(core.enterMode("experiment", "Measure convergence", experiment).block, false);
-const costlyRun = core.evaluateToolCall("Bash", {
+const scheduledRun = core.evaluateToolCall("Bash", {
   command: "sbatch repro/official_models/eval_obfuscated_activations.sbatch",
 });
-assert.equal(costlyRun?.block, true);
-assert.equal(costlyRun?.approval?.kind, "cost-escalation");
-core.acceptApprovedToolCall();
+assert.equal(scheduledRun, undefined);
 assert.equal(core.enterMode("exploration", "silently leave").block, true);
 
 const reproductionCore = new ResearchCore();

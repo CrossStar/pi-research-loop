@@ -31,7 +31,6 @@ const statusCalls = [];
 const widgetCalls = [];
 const notifications = [];
 const confirmations = [];
-let confirmationResult = true;
 let abortCount = 0;
 let activeTools = ["read", "write", "ask_user_question"];
 const entries = [];
@@ -49,7 +48,7 @@ const ctx = {
     theme,
     async confirm(title, message) {
       confirmations.push({ title, message });
-      return confirmationResult;
+      return true;
     },
     setStatus(id, value) { statusCalls.push({ id, value }); },
     setWidget(id, value) { widgetCalls.push({ id, value }); },
@@ -123,24 +122,17 @@ activeTools = activeTools.filter((name) => name !== "ask_user_question");
 assert.match(runtime.policy(), /\[EXPERIMENT CODE\]/);
 assert.doesNotMatch(runtime.policy(), /\[RESEARCH DECISIONS\]/);
 activeTools.push("ask_user_question");
-const approved = await runtime.evaluateToolCall("bash", {
+const confirmationCount = confirmations.length;
+const scheduled = await runtime.evaluateToolCall("bash", {
   command: "sbatch repro/official_models/eval_obfuscated_activations.sbatch",
 }, ctx);
-assert.equal(approved, undefined);
-assert.match(confirmations.at(-1).title, /Approve costly execution/);
-assert.equal(
-  statusCalls.some((call) => call.value?.includes("waiting for decision")),
-  true,
-);
-assert.equal(abortCount, 1);
-
-confirmationResult = false;
-const declined = await runtime.evaluateToolCall("bash", {
-  command: "qsub repro/official_models/eval_obfuscated_activations.pbs",
+assert.equal(scheduled, undefined);
+const distributed = await runtime.evaluateToolCall("bash", {
+  command: "torchrun --nproc-per-node=4 experiment.py",
 }, ctx);
-assert.equal(declined?.block, true);
-assert.match(declined?.reason, /current turn was stopped/i);
-assert.equal(abortCount, 2);
+assert.equal(distributed, undefined);
+assert.equal(confirmations.length, confirmationCount);
+assert.equal(abortCount, 1);
 
 runtime.clearStatus(ctx);
 assert.deepEqual(widgetCalls.at(-1), { id: "research-loop-status", value: undefined });

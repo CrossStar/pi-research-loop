@@ -221,7 +221,21 @@ Viewer 默认绑定 `127.0.0.1`，从 `43119` 开始寻找空闲端口：
 
 `/latest` 不随新实验变化。每次刷新都会读取当前最新 checkpoint。
 
-远程使用：
+监听地址通过环境变量选择：
+
+```bash
+# 默认：仅本机与 SSH tunnel 可访问
+RESEARCH_LOOP_CHECKPOINT_HOST=127.0.0.1 pi -ne -e .
+
+# 可选：可信局域网中的其他主机可直接访问
+RESEARCH_LOOP_CHECKPOINT_HOST=0.0.0.0 pi -ne -e .
+```
+
+只接受这两个值，配置错误会阻止 Viewer 启动并给出明确提示。`0.0.0.0` 模式没有 authentication；
+Pi 会显示安全警告，终端 URL 使用服务器 hostname。hostname 无法从客户端解析时，使用服务器 IP
+替换 URL 中的 hostname。该模式只用于可信网络。
+
+远程使用推荐保留 `127.0.0.1` 并建立 SSH tunnel：
 
 ```bash
 ssh -N -o RemoteCommand=none -o RequestTTY=no -L 43119:127.0.0.1:43119 moon

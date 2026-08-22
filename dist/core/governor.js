@@ -1,4 +1,4 @@
-const EXPLICIT_BROAD_WORK = /\b(?:all tests|full test suite|run (?:the )?entire test|repository[- ]wide|repo[- ]wide|checksum|sha256|exhaustive benchmark|long[- ]running job)\b|全部测试|完整测试|全量测试|运行.*测试|整个仓库.*(?:测试|格式化)|校验和|长时间任务|完整基准测试/i;
+const EXPLICIT_BROAD_WORK = /\b(?:all tests|full test suite|run (?:the )?entire test|repository[- ]wide|repo[- ]wide|checksum|sha256|exhaustive benchmark)\b|全部测试|完整测试|全量测试|运行.*测试|整个仓库.*(?:测试|格式化)|校验和|完整基准测试/i;
 const FULL_TEST_PATTERNS = [
     /^\s*(?:python(?:3)?\s+-m\s+)?pytest(?:\s+-[\w=-]+)*\s*$/i,
     /^\s*(?:npm|pnpm|yarn)\s+(?:test|run\s+test)(?:\s+--?(?:silent|runInBand))?\s*$/i,
@@ -9,7 +9,6 @@ const FULL_TEST_PATTERNS = [
 const CHECKSUM_PATTERN = /\b(?:sha(?:1|224|256|384|512)sum|md5sum|shasum|certutil\s+-hashfile)\b/i;
 const REPO_FORMAT_PATTERN = /\b(?:prettier|eslint|biome)\b[^\n]*(?:--write\s+\.\b|--fix\s+\.\b|\s\.\s*$)|\bcargo\s+fmt\b[^\n]*--all\b/i;
 const BROAD_LINT_PATTERN = /^\s*(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:lint|format)\s*$/i;
-const LONG_JOB_PATTERN = /\b(?:torchrun|deepspeed|accelerate\s+launch|sbatch|qsub)\b/i;
 const REPRO_MANIFEST_PATTERN = /\b(?:pip\s+freeze|conda\s+env\s+export|npm\s+shrinkwrap)\b/i;
 const REPRODUCTION_INTENT = /\b(?:please\s+)?(?:reproduce|replicate)\b|\b(?:run|execute)\b.{0,30}\b(?:official experiment|reference protocol|paper result|baseline)\b|(?:请|帮我|开始|继续|重新|运行|执行).{0,20}(?:复现|官方实验|论文实验|基准实验)/i;
 const REPRODUCTION_META_DISCUSSION = /\b(?:analy[sz]e|explain|discuss|review|policy|guard)\b.{0,50}\b(?:reproduc|replicat)|(?:分析|解释|讨论|修正|规则|策略|插件).{0,40}(?:复现|官方实验)|(?:复现|官方实验).{0,40}(?:问题|事故|坑|规则|策略)/i;
@@ -65,25 +64,6 @@ export function evaluateResearchCommand(command, userPrompt) {
         return {
             block: true,
             reason: "Research Loop blocked repository-wide formatting or linting. Restrict it to the changed surface.",
-        };
-    }
-    if (LONG_JOB_PATTERN.test(command)) {
-        if (REPRODUCTION_INTENT.test(userPrompt))
-            return { block: false };
-        const reason = "Research Loop requires user approval before starting a likely long-running job.";
-        return {
-            block: true,
-            reason,
-            approval: {
-                kind: "cost-escalation",
-                title: "Approve costly execution?",
-                message: [
-                    "This command may start a long-running or scheduled job. Approve this exact execution?",
-                    "",
-                    preview(command),
-                ].join("\n"),
-                declineReason: "User declined the long-running job.",
-            },
         };
     }
     return { block: false };

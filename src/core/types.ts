@@ -33,7 +33,7 @@ export interface ResearchState {
   artifacts: ArtifactMetadata[];
 }
 
-export type ApprovalKind = "cost-escalation" | "protocol-deviation";
+export type ApprovalKind = "protocol-deviation";
 
 export interface ApprovalRequest {
   kind: ApprovalKind;
