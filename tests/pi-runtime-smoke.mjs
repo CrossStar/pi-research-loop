@@ -70,6 +70,7 @@ assert.deepEqual(statusCalls.at(-1), {
 assert.equal(activeTools.includes("research_mode"), true);
 assert.equal(activeTools.includes("ask_user_question"), true);
 assert.match(runtime.policy(), /ask_user_question is available/);
+assert.doesNotMatch(runtime.policy(), /\[EXPERIMENT CODE\]/);
 activeTools = activeTools.filter((name) => name !== "ask_user_question");
 assert.doesNotMatch(runtime.policy(), /ask_user_question is available/);
 activeTools.push("ask_user_question");
@@ -110,6 +111,18 @@ runtime.enterMode("experiment", "Run a scheduled evaluation", {
   intent: "diagnostic",
   plannedDataScope: "official evaluation split",
 }, ctx);
+const experimentPolicy = runtime.policy();
+assert.match(experimentPolicy, /\[EXPERIMENT CODE\]/);
+assert.match(experimentPolicy, /top-level main\(\) mirror the natural experiment phases/);
+assert.match(experimentPolicy, /must use Rich/);
+assert.match(experimentPolicy, /Use tqdm/);
+assert.match(experimentPolicy, /--quick or --smoke/);
+assert.match(experimentPolicy, /summary\.json, per_seed\.csv/);
+assert.match(experimentPolicy, /Avoid factories, registries, strategy\/context hierarchies/);
+activeTools = activeTools.filter((name) => name !== "ask_user_question");
+assert.match(runtime.policy(), /\[EXPERIMENT CODE\]/);
+assert.doesNotMatch(runtime.policy(), /\[RESEARCH DECISIONS\]/);
+activeTools.push("ask_user_question");
 const approved = await runtime.evaluateToolCall("bash", {
   command: "sbatch repro/official_models/eval_obfuscated_activations.sbatch",
 }, ctx);

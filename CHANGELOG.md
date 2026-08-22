@@ -2,6 +2,13 @@
 
 All notable changes to Research Loop are documented in this file.
 
+## Unreleased
+
+### Pi experiment code
+
+- Inject a focused Experiment Mode code contract that prioritizes researcher readability, direct execution, Rich phase summaries, tqdm progress, centralized parameters, explicit randomness, inspectable intermediate results, predictable artifacts, and restrained architecture.
+- Document the same contract in `docs/experiment-code.md` without adding a framework or runtime abstraction layer.
+
 ## 0.5.0 - 2026-08-21
 
 ### Persistent Checkpoint Viewer

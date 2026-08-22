@@ -23,6 +23,23 @@ const STRUCTURED_DECISION_GUIDANCE = [
   "Governor approval dialogs authorize one exact action. If the user declines, stop and do not retry that action.",
 ].join("\n");
 
+const PI_EXPERIMENT_CODE_GUIDANCE = [
+  "[EXPERIMENT CODE]",
+  "When creating or revising experiment code, optimize for a researcher's reading, running, debugging, modification, and inspection loop. Prefer readable, runnable, observable, modifiable code over production-style architecture.",
+  "Make the top-level main() mirror the natural experiment phases so the full workflow is understandable without opening every helper. Functions should represent natural experimental actions or clear responsibilities; keep simple contiguous logic together.",
+  "Python experiment scripts must use Rich with a restrained hierarchy for the startup configuration summary, major phase boundaries, scientifically useful intermediate checks, condition/metric tables, the final result summary, and explicit artifact paths. Declare Rich and tqdm in the project's existing dependency surface and do not build fallback logging UI. Do not log every function, batch, sample, tensor shape, or internal state.",
+  "Use tqdm for repeated work that makes the researcher wait: dataset processing, batched inference, activation extraction, layer scans, seed sweeps, or large evaluation. Avoid progress bars for millisecond loops and avoid deeply nested bars.",
+  "Centralize every research-significant parameter in one obvious config/CLI surface: model, dataset, layers, seeds, batch size, split, thresholds, run count, and output directory. Use descriptive names and remove unexplained magic numbers.",
+  "Keep the normal entry point direct, preferably `python experiment.py`; provide clear --help. For costly runs, add a small --quick or --smoke path that exercises the whole pipeline. Show every reduced setting and treat a reduced reproduction run as diagnostic unless the user approved the deviation.",
+  "After each major phase, print only checks that help detect a scientifically meaningful problem, such as sample counts, activation shape, label balance/correlation, or condition summaries. Fail early with a concrete actionable error when a missing input or incompatible setting would otherwise waste a long run.",
+  "Make randomness explicit: identify which seed controls splits, pseudo-labels, initialization, and sampling. Never silently change seeds, devices, models, environment variables, output locations, or experimental conditions, and never silently fall back.",
+  "Use names that express research meaning. Comments should explain why a split, metric, layer, control, fixed variable, or protocol deviation exists; do not translate obvious code into comments.",
+  "Separate model loading, data preparation, conditions, analysis, and plotting only when they are naturally distinct. Avoid factories, registries, strategy/context hierarchies, tiny wrapper chains, and reusable frameworks until multiple real experiments need them.",
+  "Avoid broad defensive layers, retries, compatibility shims, silent recovery, repeated existence checks, and large try/except shells. Add only checks that prevent expensive wasted work or misleading results.",
+  "Save scientific artifacts once under a stable predictable run directory, with names such as summary.json, per_seed.csv, per_layer.csv, figures/, predictions, activations, or checkpoints. Do not copy artifacts for checkpoint presentation and do not create display-only files.",
+  "End the run with a compact Rich result table and a labeled list of exact saved paths so the researcher can judge the result and start the next iteration immediately.",
+].join("\n");
+
 export type { ResearchState, ToolGateDecision } from "./core/types.js";
 
 export function shouldAbortForCancelledQuestionnaire(toolName: string, details: unknown): boolean {
@@ -116,8 +133,11 @@ export class ResearchRuntime {
 
   policy(): string | undefined {
     const policy = this.core.policy();
-    if (!policy || !this.pi.getActiveTools().includes(ASK_USER_QUESTION_TOOL)) return policy;
-    return `${policy}\n${STRUCTURED_DECISION_GUIDANCE}`;
+    if (!policy) return undefined;
+    const guidance = [policy];
+    if (this.core.workMode === "experiment") guidance.push(PI_EXPERIMENT_CODE_GUIDANCE);
+    if (this.pi.getActiveTools().includes(ASK_USER_QUESTION_TOOL)) guidance.push(STRUCTURED_DECISION_GUIDANCE);
+    return guidance.join("\n");
   }
 
   startTurn(): void {

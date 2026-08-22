@@ -371,6 +371,18 @@ EXPERIMENT -> research_checkpoint -> EXPLORATION
 只有完全没有产生 interpretable evidence 时，才能使用 `research_abort_experiment`。负结果、
 失败模式和 diagnostic observation 都属于应进入 Checkpoint 的 evidence。
 
+#### Pi 实验代码
+
+Pi 在 Experiment Mode 中新建或修改实验代码时，优先优化研究者的阅读、运行、调试、修改与检查
+体验。顶层 `main()` 应映射自然实验阶段；Python 脚本使用 Rich 展示配置、phase、关键检查、结果表
+和保存路径，使用 `tqdm` 展示真正耗时的重复工作。研究参数集中在 config/CLI，并提供直接运行、
+清晰 `--help` 以及长实验的 `--quick` 或 `--smoke` 路径。
+
+代码应显式说明随机性和实验条件，使用稳定结果目录，保存科研 artifact 一次，并以可采取行动的
+错误尽早终止会浪费长时间计算的运行。避免工厂、registry、strategy/context hierarchy、细碎 wrapper、
+广泛 retry/fallback 和生产服务式防御层。详细约束见
+[`docs/experiment-code.md`](docs/experiment-code.md)。
+
 ## Checkpoint
 
 Checkpoint 由研究语义触发，而不是固定 action 上限。典型触发条件包括：
@@ -440,6 +452,7 @@ Research Core 不依赖 Pi 或 Claude Code API。Adapter 只负责宿主注册�
 
 详细文档：
 
+- [`docs/experiment-code.md`](docs/experiment-code.md)：Pi Experiment Mode 实验代码 contract；
 - [`docs/checkpoint-viewer.md`](docs/checkpoint-viewer.md)：Pi Markdown Writer、Viewer、artifact 和 chart contract；
 - [`docs/claude-plugin.md`](docs/claude-plugin.md)：Claude Code Plugin 迁移与 adapter 说明。
 
